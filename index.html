@@ -351,6 +351,39 @@ section.weekline { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px
 .t-good { color: var(--up); } .t-warn { color: #C47F00; } .t-bad { color: var(--down); }
 .ffactors { display: flex; flex-wrap: wrap; gap: 6px; }
 @media (prefers-reduced-motion: no-preference) { .needle { transform-origin: 70px 66px; animation: needle .9s cubic-bezier(.3,1.4,.5,1) both; } @keyframes needle { from { transform: rotate(calc(-90deg - var(--a))); } } }
+.drows { display: flex; flex-direction: column; }
+.drow { display: grid; grid-template-columns: 64px 1fr 14px; gap: 8px; align-items: center; border: 0; background: none; text-align: left; padding: 10px 0; border-top: 1px solid var(--line); min-height: 44px; width: 100%; }
+.drow:first-child { border-top: 0; }
+.drow .dl { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.drow .dl .dot { width: 7px; height: 7px; }
+.drow.food .dl .dot { background: var(--food); } .drow.rest .dl .dot { background: var(--rest); } .drow.body .dl .dot { background: var(--bodyc); } .drow.move .dl .dot { background: var(--move); }
+.drow .dv { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; font-size: 14px; }
+.drow .dv b { font-weight: 800; font-variant-numeric: tabular-nums; }
+.drow .dv .chip { margin: 0; }
+.dsub { font-size: 12px; color: var(--muted); }
+.dnone { font-size: 13px; color: var(--muted); }
+.dchev { color: var(--muted); font-size: 16px; }
+.mstack { display: inline-flex; width: 64px; height: 8px; border-radius: 4px; overflow: hidden; gap: 1px; background: var(--fill); }
+.mstack i { display: block; height: 100%; }
+.wbar { display: inline-block; width: 64px; height: 6px; border-radius: 3px; background: var(--fill); overflow: hidden; }
+.wbar i { display: block; height: 100%; background: var(--water); }
+.sdot { font-size: 12px; font-weight: 600; color: var(--muted); background: var(--fill); border-radius: 8px; padding: 2px 8px; }
+.sdot.on { color: var(--food); background: var(--food-soft); }
+.sdot small { margin-left: 3px; font-weight: 500; opacity: .8; }
+button.tgt { border: 0; background: none; padding: 0; text-align: left; width: 100%; cursor: pointer; }
+button.tgt:disabled { cursor: default; color: inherit; opacity: 1; }
+.tgt-bar.stack { display: flex; gap: 2px; background: var(--fill); }
+.tgt-bar.stack i { border-radius: 2px; }
+.mrow { grid-template-columns: 52px 1fr auto auto !important; align-items: center !important; }
+.mtime { display: flex; flex-direction: column; font-variant-numeric: tabular-nums; font-weight: 700; font-size: 14px; }
+.mtime small { font-size: 11px; color: var(--muted); font-weight: 600; }
+.mmac { font-size: 12px; color: var(--muted); }
+.mthumb { width: 40px; height: 40px; border: 0; padding: 0; border-radius: 10px; overflow: hidden; background: var(--fill); }
+.mthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.it-val small { font-size: 11px; color: var(--muted); margin-left: 1px; }
+.preset img { width: 22px; height: 22px; border-radius: 6px; object-fit: cover; margin: -4px 6px -4px -4px; vertical-align: middle; }
+.textbtn.inl { display: inline; min-height: 0; padding: 0 0 0 6px; font-size: 12px; }
+.tapsip { font-size: 11px; }
 .presets { display: flex; flex-wrap: wrap; gap: 6px; }
 .preset { border: 0; background: var(--food-soft); color: var(--food); border-radius: 999px; padding: 8px 12px; font-weight: 700; font-size: 13px; min-height: 34px; }
 .preset small { font-weight: 500; opacity: .8; margin-left: 2px; }
@@ -994,9 +1027,11 @@ function mealList(k, ro) {
   const tm = (m) => /^\d{2}:\d{2}$/.test(m.at || "") ? m.at : MEAL_DEFAULT_AT[m.meal] || "12:00";
   return [...day(k).meals].sort((a,b) => tm(a).localeCompare(tm(b)) || (order[a.meal]??9) - (order[b.meal]??9)).map(x => {
     const mac = [x.carb ? "탄 " + n0(x.carb) + "g" : "", x.protein ? "단 " + n0(x.protein) + "g" : "", x.fat ? "지 " + n0(x.fat) + "g" : ""].filter(Boolean).join(" · ");
-    return `<li><div class="it-main"${ro ? "" : ` data-editmeal="${k}:${esc(x.id)}" role="button" tabindex="0"`}><b>${esc(x.menu)}${ro ? "" : ' <span class="editmark">수정</span>'}</b><span><span class="chip">${esc(x.meal)}${/^\d{2}:\d{2}$/.test(x.at || "") ? " " + x.at : ""}</span>${mac}</span>
-      ${x.photo || (x.photos && x.photos.length) ? `<div class="it-photos">${photoBtns([x.photo, ...(x.photos || [])])}</div>` : ""}</div>
-      <span class="it-val">${n0(x.kcal)} kcal</span>${ro ? "<span></span>" : `<button class="del" data-del="${k}:meals:${esc(x.id)}" aria-label="삭제">×</button>`}</li>`;
+    const ph = [x.photo, ...(x.photos || [])].filter(Boolean)[0];
+    return `<li class="mrow"><span class="mtime">${tm(x)}<small>${esc(x.meal)}</small></span>
+      <div class="it-main"${ro ? "" : ` data-editmeal="${k}:${esc(x.id)}" role="button" tabindex="0" aria-label="${esc(x.menu)} 수정"`}><b>${esc(x.menu)}</b><span class="mmac">${mac || "탄단지 없음"}</span></div>
+      ${ph && photoSrc(ph) ? `<button class="mthumb" data-photo="${esc(ph)}" aria-label="사진 보기"><img src="${esc(photoSrc(ph))}" alt=""></button>` : "<span></span>"}
+      <span class="it-val">${n0(x.kcal)}<small>kcal</small></span></li>`;
   }).join("");
 }
 const activeBanner = () => active ? `<button class="banner" data-act="resume"><span>${active.pausedAt ? "일시정지" : "진행 중"}: ${esc(active.name)}</span><span class="num" data-clock>${clock(activeMs(active))}</span></button>` : "";
@@ -1069,33 +1104,27 @@ function renderHome() {
       </div>
     </section>
     ${dayDetail(cur)}
-    <div class="summary three">
-      ${statTile("food","오늘 섭취", t.food.toLocaleString(), "kcal", t.food/foodGoal(), foodGoal().toLocaleString())}
-      ${statTile("move","오늘 볼륨", kg(t.vol), "kg", null, t.parts.join(" · ") || "기록 없음")}
-      ${statTile("rest","지난밤 수면", t.sleep ? fmtH(t.sleep) : "–", "", t.sleep/sleepNeed(), sleepNeed() + "시간")}
-    </div>
     ${backupPanel("기록은 입력할 때마다 앱 안에 저장되고, Download/하루기록 폴더에도 자동 백업돼요. 폰을 바꿀 땐 그 백업 파일을 옮겨 복원하세요. 사진은 백업 파일에 들어가지 않아요.")}`;
 }
 function dayDetail(k) {
   const d = day(k), t = totals(k), dd = parseKey(k), b = days[k] && days[k].body;
-  const w = workoutList(k, true), m = d.meals;
+  const row = (cls, label, attrs, body) => `<button class="drow ${cls}" ${attrs}><span class="dl"><i class="dot${cls === "water" ? " water" : cls === "alc" ? " alc" : ""}"></i>${label}</span><span class="dv">${body}</span><span class="dchev">›</span></button>`;
+  const none = (txt) => `<span class="dnone">${txt}</span>`;
+  const kcalT = t.carb * 4 + t.protein * 4 + t.fat * 9;
+  const sd = suppDue(k), drinks = d.drinks.length ? dayAlcohol(k) : null, wml = waterMl(k), wg = waterGoal(k);
   return `<section class="panel detail">
-    <div class="panel-h"><h2>${dd.getMonth()+1}월 ${dd.getDate()}일 (${WD[dd.getDay()]}) 기록</h2></div>
-    <div class="dsec move"><div class="dh"><span><i class="dot"></i>운동</span>${t.vol ? `<span class="hint">총 볼륨 ${kg(t.vol)}kg</span>` : ""}</div>
-      ${t.move ? `<p class="hint">웨이트 ${t.moveW}분 · 유산소 ${t.moveC}분</p>` : ""}
-      ${w ? `<ul class="items">${w}</ul>` : `<p class="empty">운동 기록이 없어요.</p>`}</div>
-    <div class="dsec food"><div class="dh"><span><i class="dot"></i>식단</span>${m.length ? `<span class="hint">${t.food.toLocaleString()} kcal · 탄 ${t.carb} 단 ${t.protein} 지 ${t.fat}g</span>` : ""}</div>
-      ${m.length ? `<div class="dchips">${m.map(x => `<button class="dchip" data-editmeal="${k}:${esc(x.id)}">${esc(x.meal)} ${esc(x.menu)} <small>${n0(x.kcal)}</small></button>`).join("")}</div>` : `<p class="empty">식단 기록이 없어요.</p>`}</div>
-    ${suppRate(k).all || Object.keys(d.supps).length ? `<div class="dsec food"><div class="dh"><span><i class="dot"></i>영양제 · 약</span><span class="hint">${suppRate(k).done} / ${suppRate(k).all} 복용</span></div>
-      <p class="dtext">${suppDue(k).filter(x => x.done).map(x => `${esc(x.s.name)}(${x.t})`).join(" · ") || "아직 체크한 게 없어요"}</p></div>` : ""}
-    ${d.drinks.length ? `<div class="dsec food"><div class="dh"><span><i class="dot alc"></i>술</span><span class="hint">${stdDrinks(dayAlcohol(k).g).toFixed(1)}표준잔 · ${Math.round(dayAlcohol(k).g)}g</span></div>
-      <div class="dchips">${d.drinks.map(x => `<button class="dchip" data-editdrink="${k}:${esc(x.id)}">${esc(x.type)} ${n0(x.ml)}ml</button>`).join("")}</div></div>` : ""}
-    ${d.water.length ? `<div class="dsec food"><div class="dh"><span><i class="dot water"></i>물</span><span class="hint">${(waterMl(k) / 1000).toFixed(2)}L / ${(waterGoal(k) / 1000).toFixed(1)}L</span></div></div>` : ""}
-    <div class="dsec rest"><div class="dh"><span><i class="dot"></i>수면</span><button class="textbtn" data-editsleep="${k}">${d.sleep ? "수정" : "+ 기록"}</button></div>
-      ${d.sleep ? `<p class="dtext">${esc(d.sleep.bed)} 취침 → ${esc(d.sleep.wake)} 기상 · ${fmtH(t.sleep)}</p>` : ""}</div>
-    ${b && n0(b.weight) ? `<div class="dsec body"><div class="dh"><span><i class="dot"></i>몸 기록</span><button class="textbtn" data-editbody="${k}">수정</button></div>
-      <p class="dtext">체중 ${n0(b.weight)}kg${n0(b.muscle) ? ` · 골격근 ${n0(b.muscle)}kg` : ""}${n0(b.fat) ? ` · 체지방 ${n0(b.fat)}kg (${fatPct(b).toFixed(1)}%)` : ""}</p></div>` : ""}
-    <div class="btns"><button class="add" data-goto="work">운동 탭에서 보기</button><button class="add" data-goto="food">식단</button><button class="add" data-goto="sleep">수면</button></div>
+    <div class="panel-h"><h2>${dd.getMonth()+1}월 ${dd.getDate()}일 (${WD[dd.getDay()]})</h2>${k === todayKey() ? '<span class="chip">오늘</span>' : ""}</div>
+    <div class="drows">
+      ${row("move", "운동", `data-dgo="work:${k}"`, d.workouts.length ? `${t.parts.length ? partChips(t.parts) : ""}<b>${t.vol ? kg(t.vol) + "kg" : ""}</b>${t.moveC ? `<span class="dsub">유산소 ${t.moveC}분</span>` : ""}` : none("기록 없음"))}
+      ${row("food", "식단", `data-dgo="food:${k}"`, d.meals.length || d.drinks.length ? `<b>${t.food.toLocaleString()}kcal</b>
+        ${kcalT ? `<span class="mstack" aria-label="탄수화물 ${t.carb}g 단백질 ${t.protein}g 지방 ${t.fat}g"><i style="flex:${t.carb * 4};background:var(--cardio)"></i><i style="flex:${t.protein * 4};background:var(--move)"></i><i style="flex:${t.fat * 9};background:var(--rest)"></i></span>` : ""}
+        <span class="dsub">탄 ${t.carb} · 단 ${t.protein} · 지 ${t.fat}g</span>` : none("기록 없음"))}
+      ${sd.length ? row("food", "영양제", `data-dgo="supp:${k}"`, sd.map(x => `<span class="sdot ${x.done ? "on" : ""}">${x.done ? "✓" : "○"} ${esc(x.s.name)}${x.s.times.length > 1 ? `<small>${x.t}</small>` : ""}</span>`).join("")) : ""}
+      ${drinks ? row("alc", "술", `data-dgo="drink:${k}"`, `<b>${stdDrinks(drinks.g).toFixed(1)}잔</b><span class="dsub">${d.drinks.map(x => esc(x.type)).join(" · ")}</span>`) : ""}
+      ${row("water", "물", `data-dgo="food:${k}"`, wml ? `<b>${(wml / 1000).toFixed(1)}L</b><span class="wbar"><i style="width:${Math.min(100, wml / wg * 100).toFixed(0)}%"></i></span><span class="dsub">/ ${(wg / 1000).toFixed(1)}L</span>` : none("기록 없음"))}
+      ${row("rest", "수면", `data-editsleep="${k}"`, d.sleep ? `<b>${fmtH(t.sleep)}</b><span class="dsub">${esc(d.sleep.bed)} → ${esc(d.sleep.wake)}</span>` : none("+ 기록"))}
+      ${b && n0(b.weight) ? row("body", "몸", `data-editbody="${k}"`, `<b>${Math.round(n0(b.weight) * 10) / 10}kg</b>${n0(b.fat) ? `<span class="dsub">체지방 ${fatPct(b).toFixed(1)}%</span>` : ""}${n0(b.muscle) ? `<span class="dsub">골격근 ${n0(b.muscle)}kg</span>` : ""}`) : ""}
+    </div>
   </section>`;
 }
 
@@ -1338,15 +1367,17 @@ function nutritionCard(t) {
   if (p.missing) return `<section class="panel food"><div class="panel-h"><h2><i class="dot"></i>목표 식단</h2><button class="add" data-act="profile">내 정보</button></div>${goalSeg}
     <p class="empty">${p.missing === "body" ? "홈의 몸 기록에 체중을 먼저 적어 주세요. 체지방량까지 적으면 더 정확해요." : "체지방량을 적지 않았다면 성별·나이·키가 필요해요. '내 정보'를 눌러 한 번만 입력해 주세요."}</p>
     ${p.missing === "body" ? `<button class="add solid" data-act="body">몸 기록 하기</button>` : `<button class="add solid" data-act="profile">내 정보 입력</button>`}</section>`;
-  const bar = (label, v, goal, unit, color) => `<div class="tgt"><div class="tgt-h"><span>${label}</span><b>${v}<small> / ${goal}${unit}</small></b></div><div class="tgt-bar"><i style="width:${Math.min(100, goal ? v / goal * 100 : 0).toFixed(1)}%;background:${color}"></i>${v > goal * 1.1 ? `<s style="left:${(goal / v * 100).toFixed(1)}%"></s>` : ""}</div></div>`;
+  const bar = (label, v, goal, unit, color, key) => stackBar(label, v, goal, unit, color, key);
+  void 0; const _unused = (label, v, goal, unit, color) => `<div class="tgt"><div class="tgt-h"><span>${label}</span><b>${v}<small> / ${goal}${unit}</small></b></div><div class="tgt-bar"><i style="width:${Math.min(100, goal ? v / goal * 100 : 0).toFixed(1)}%;background:${color}"></i>${v > goal * 1.1 ? `<s style="left:${(goal / v * 100).toFixed(1)}%"></s>` : ""}</div></div>`;
   return `<section class="panel food"><div class="panel-h"><h2><i class="dot"></i>목표 식단</h2><button class="add" data-act="profile">내 정보</button></div>
     ${goalSeg}
     <div class="planhead"><div><span class="k">${esc(p.g.desc)} · 하루 권장</span><span class="v">${p.kcal.toLocaleString()}<small>kcal</small></span></div>
       <div class="pm"><span>단백질 <b>${p.protein}g</b></span><span>탄수 <b>${p.carb}g</b></span><span>지방 <b>${p.fat}g</b></span></div></div>
-    ${bar(cur === todayKey() ? "오늘 칼로리" : "칼로리", t.food, p.kcal, "kcal", "var(--food)")}
-    ${bar("단백질", t.protein, p.protein, "g", "var(--move)")}
-    ${bar("탄수화물", t.carb, p.carb, "g", "var(--cardio)")}
-    ${bar("지방", t.fat, p.fat, "g", "var(--rest)")}
+    ${bar(cur === todayKey() ? "오늘 칼로리" : "칼로리", t.food, p.kcal, "kcal", "var(--food)", "kcal")}
+    ${bar("탄수화물", t.carb, p.carb, "g", "var(--cardio)", "carb")}
+    ${bar("단백질", t.protein, p.protein, "g", "var(--move)", "protein")}
+    ${bar("지방", t.fat, p.fat, "g", "var(--rest)", "fat")}
+    <p class="hint">막대 한 칸이 한 끼예요. 누르면 언제 무엇을 먹었는지 보여요.</p>
     <p class="hint">식이섬유 ${p.fiber}g+ · 물 ${(waterGoal(cur) / 1000).toFixed(1)}L</p>
     <button type="button" class="textbtn basisbtn" data-info="${esc(`<b>계산 근거</b><br>기초대사량 ${p.bmr.toLocaleString()}kcal — ${esc(p.method)}<br>
       활동 계수 ×${p.factor.toFixed(2)} — 최근 4주 주 ${p.tdays.toFixed(1)}일 운동${pr.job && JOBS[pr.job] ? ` + ${JOBS[pr.job][0]}` : ""}<br>
@@ -1550,7 +1581,7 @@ function beakerSvg(k) {
   const cid = "bk-clip-" + (++beakerSeq);
   const lv = waterLevel(k), y = (1 - lv) * (BEAKER_H - 16) + 8;
   const wave = (amp, off) => { let d = `M0 ${8 + off}`; for (let x = 0; x <= 240; x += 20) d += ` Q ${x + 10} ${8 + off + (x / 20 % 2 ? amp : -amp)} ${x + 20} ${8 + off}`; return d + ` V ${BEAKER_H + 20} H 0 Z`; };
-  return `<button class="beaker" data-act="water" aria-label="물 250ml 추가">
+  return `<button class="beaker" data-act="water" aria-label="물 한 모금(50ml) 추가">
     <svg viewBox="0 0 120 ${BEAKER_H + 14}" aria-hidden="true">
       <defs><clipPath id="${cid}"><path d="M18 6 H102 L94 ${BEAKER_H} Q93 ${BEAKER_H + 6} 87 ${BEAKER_H + 6} H33 Q27 ${BEAKER_H + 6} 26 ${BEAKER_H} Z"></path></clipPath></defs>
       <path d="M18 6 H102 L94 ${BEAKER_H} Q93 ${BEAKER_H + 6} 87 ${BEAKER_H + 6} H33 Q27 ${BEAKER_H + 6} 26 ${BEAKER_H} Z" fill="var(--fill)"></path>
@@ -1569,7 +1600,8 @@ function waterCard(k, compact) {
     ${beakerSvg(k)}
     <div class="wc-info"><span class="k">물</span><span class="v"><b class="wml">${(ml / 1000).toFixed(2)}</b><small>/ ${(goal / 1000).toFixed(1)}L</small></span>
       <span class="hint wleft">${ml >= goal ? "오늘 목표 달성!" : `${Math.ceil((goal - ml) / 250)}컵 더 (250ml 기준)`}</span>
-      <div class="btns"><button class="add" data-water="50">+ 한 모금</button><button class="add" data-water="250">+ 1컵</button><button class="add" data-water="500">+ 500ml</button>${compact ? "" : `<button class="add" data-act="watercustom">직접</button>`}</div></div></div>`;
+      <div class="btns">${compact ? "" : `<button class="add" data-water="50">+ 한 모금</button>`}<button class="add" data-water="250">+ 1컵</button><button class="add" data-water="500">+ 500ml</button><button class="add" data-act="watercustom">직접</button></div>
+      <span class="hint tapsip">비커를 누르면 한 모금(50ml)</span></div></div>`;
 }
 function refreshWater() {
   const det = document.querySelector("#view-home .detail");
@@ -2038,6 +2070,20 @@ function deloadCard() {
   </section>`;
 }
 
+/* stacked target bar: one segment per meal (and drinks), tap for what was eaten when */
+function intakeParts(k, key) {
+  const tm = (m) => /^\d{2}:\d{2}$/.test(m.at || "") ? m.at : MEAL_DEFAULT_AT[m.meal] || "12:00";
+  const parts = day(k).meals.map(m => ({ at: tm(m), label: `${m.meal} ${m.menu}`, v: n0(m[key]) }));
+  if (key === "kcal" || key === "carb") day(k).drinks.forEach(x => parts.push({ at: x.t > 1 ? hhmm(x.t) : "", label: `술 ${x.type} ${n0(x.ml)}ml`, v: Math.round(key === "kcal" ? drinkKcal(x) : drinkCarb(x)) }));
+  return parts.filter(x => x.v > 0).sort((a, b) => (a.at || "99").localeCompare(b.at || "99"));
+}
+function stackBar(label, v, goal, unit, color, key) {
+  const parts = key ? intakeParts(cur, key) : [], scale = Math.max(goal || 0, v, 1);
+  const info = parts.length ? `<b>${label} ${Math.round(v)}${unit}</b>${goal ? ` / 목표 ${goal}${unit}` : ""}<br>` + parts.map(x => `${x.at ? x.at + " · " : ""}${esc(x.label)} — ${Math.round(x.v)}${unit}`).join("<br>") : "";
+  return `<button type="button" class="tgt" ${info ? `data-info="${esc(info)}"` : "disabled"}><div class="tgt-h"><span>${label}</span><b>${Math.round(v)}<small>${goal ? ` / ${goal}` : ""}${unit}</small></b></div>
+    <div class="tgt-bar stack">${(parts.length ? parts : [{ v }]).map((x, i) => `<i style="width:${(x.v / scale * 100).toFixed(2)}%;background:${color};opacity:${Math.max(0.45, 1 - i * 0.14).toFixed(2)}"></i>`).join("")}
+      ${goal && v > goal ? `<s style="left:${(goal / scale * 100).toFixed(1)}%"></s>` : ""}</div></button>`;
+}
 /* ---------- per-part history ---------- */
 const partHistory = memo(partHistoryRaw);
 function partHistoryRaw(part) {
@@ -2150,15 +2196,10 @@ function renderFood() {
       <div class="panel-h"><h2><i class="dot"></i>${cur === todayKey() ? "오늘 " : ""}섭취</h2></div>
       <div class="kcalrow"><span class="num big">${t.food.toLocaleString()}</span><span class="hint">/ ${FG.toLocaleString()} kcal</span></div>
       <div class="stat-bar"><i style="width:${Math.min(100, t.food / FG * 100)}%"></i></div>
-      <div class="macros">
-        <div><span class="k">탄수화물</span><b>${t.carb}g</b><span class="hint">${pct(t.carb*4)}%</span></div>
-        <div><span class="k">단백질</span><b>${t.protein}g</b><span class="hint">${pct(t.protein*4)}%</span></div>
-        <div><span class="k">지방</span><b>${t.fat}g</b><span class="hint">${pct(t.fat*9)}%</span></div>
-      </div>
+      ${stackBar("탄수화물", t.carb, 0, "g", "var(--cardio)", "carb")}${stackBar("단백질", t.protein, 0, "g", "var(--move)", "protein")}${stackBar("지방", t.fat, 0, "g", "var(--rest)", "fat")}
       ${kc ? `<div class="macbar"><i style="width:${pct(t.carb*4)}%;background:var(--food)"></i><i style="width:${pct(t.protein*4)}%;background:var(--move)"></i><i style="width:${pct(t.fat*9)}%;background:var(--rest)"></i></div>` : ""}
     </section>` : ""}
     <section class="panel food"><div class="panel-h"><h2><i class="dot"></i>먹은 것</h2><button class="add solid" data-act="meal">+ 식단 추가</button></div>
-      ${presetRow(false)}
       ${m ? `<ul class="items">${m}</ul>` : `<p class="empty">아직 식사 기록이 없어요.</p>`}</section>
     ${chart("food", "섭취 칼로리", "kcal", ts.map(x => x.food), FG, v => Math.round(v).toLocaleString())}
     ${chart("food", "단백질", "g", ts.map(x => x.protein), plan.protein || 0, v => Math.round(v))}`;
@@ -2634,11 +2675,17 @@ function openCardio(k = cur, id = null) {
 /* frequent meals: one tap adds them; the user registers and deletes them */
 const presets = () => lib.mealPresets || [];
 const mealOfNow = () => { const h = new Date().getHours(); return h < 10 ? "아침" : h < 15 ? "점심" : h < 21 ? "저녁" : "간식"; };
-const presetLabel = (x) => `${esc(x.menu)}${x.kcal ? ` <small>${n0(x.kcal)}</small>` : ""}`;
+const presetLabel = (x) => `${x.photo && photoSrc(x.photo) ? `<img src="${esc(photoSrc(x.photo))}" alt="">` : ""}${esc(x.menu)}${x.kcal ? ` <small>${n0(x.kcal)}</small>` : ""}`;
+// a photo may be shared by a frequent meal and the meals added from it: only delete files nothing points to
+function photoInUse(id) {
+  if (presets().some(x => x.photo === id) || lib.exercises.some(e => e.photo === id)) return true;
+  return Object.keys(days).some(k => { const d = day(k); return d.meals.some(m => m.photo === id || (m.photos || []).includes(id)) || d.workouts.some(w => (w.photos || []).includes(id)); });
+}
+const dropPhoto = (id) => { if (assets && id && !photoInUse(id)) assets.delete(id); };
 function addPreset(id, meal, at) {
   const x = presets().find(p => p.id === id); if (!x) return;
   const ml = meal || mealOfNow();
-  const d = day(cur), m = { id: uid(), meal: ml, at: at || (cur === todayKey() ? nowHM() : MEAL_DEFAULT_AT[ml]), menu: x.menu, kcal: n0(x.kcal), carb: n0(x.carb), protein: n0(x.protein), fat: n0(x.fat), photos: [] };
+  const d = day(cur), m = { id: uid(), meal: ml, at: at || (cur === todayKey() ? nowHM() : MEAL_DEFAULT_AT[ml]), menu: x.menu, kcal: n0(x.kcal), carb: n0(x.carb), protein: n0(x.protein), fat: n0(x.fat), photos: x.photo ? [x.photo] : [] };
   d.meals = [...d.meals, m]; days = { ...days, [cur]: d }; persist(cur); render();
   toast(`${x.menu} 추가했어요`, () => { const e = day(cur); e.meals = e.meals.filter(y => y.id !== m.id); days = { ...days, [cur]: e }; persist(cur); render(); });
 }
@@ -2652,7 +2699,7 @@ function openPresets() {
   sheetState = {};
   const draw = () => {
     const list = presets();
-    $("ps-list").innerHTML = list.length ? list.map(x => `<li><div class="it-main"><b>${esc(x.menu)}</b><span>${n0(x.kcal)}kcal · 탄 ${n0(x.carb)} 단 ${n0(x.protein)} 지 ${n0(x.fat)}g</span></div>
+    $("ps-list").innerHTML = list.length ? list.map(x => `<li><div class="it-main exname">${x.photo && photoSrc(x.photo) ? `<span class="exthumb" style="width:40px;height:40px"><img src="${esc(photoSrc(x.photo))}" alt=""></span>` : ""}<div><b>${esc(x.menu)}</b><span>${n0(x.kcal)}kcal · 탄 ${n0(x.carb)} 단 ${n0(x.protein)} 지 ${n0(x.fat)}g</span></div></div>
       <span></span><button type="button" class="del" data-psdel="${esc(x.id)}" aria-label="${esc(x.menu)} 삭제">×</button></li>`).join("") : `<li><p class="empty">아직 없어요. 아래에서 등록하세요.</p></li>`;
   };
   showSheet(`<form id="f" class="form" novalidate><h3>자주 먹는 식단</h3>
@@ -2664,17 +2711,21 @@ function openPresets() {
       <input id="ps-protein" class="inp" type="number" inputmode="decimal" min="0" placeholder="단 g" aria-label="단백질 g">
       <input id="ps-fat" class="inp" type="number" inputmode="decimal" min="0" placeholder="지 g" aria-label="지방 g">
     </div>
+    ${assets ? `<div class="field"><span class="lbl">사진 (선택)</span><div class="photos" id="f-photos"></div></div>` : ""}
     <p class="err" id="f-err" hidden></p>
     <div class="actions"><button type="button" class="cancel" id="f-cancel">닫기</button><button type="submit" class="save">등록</button></div></form>`);
-  draw();
+  draw(); sheetState.photos = []; sheetState.max = 1; drawPhotos();
   $("ps-list").onclick = e => { const b = e.target.closest("[data-psdel]"); if (!b) return;
-    lib = { ...lib, mealPresets: presets().filter(x => x.id !== b.dataset.psdel) }; saveLib(); draw(); render(); };
+    const gone = presets().find(x => x.id === b.dataset.psdel);
+    lib = { ...lib, mealPresets: presets().filter(x => x.id !== b.dataset.psdel) }; saveLib(); if (gone && gone.photo) dropPhoto(gone.photo); draw(); render(); };
   $("f-cancel").onclick = () => closeSheet();
   $("f").onsubmit = e => { e.preventDefault();
     const menu = $("ps-menu").value.trim(); if (!menu) return failMsg("메뉴 이름을 입력하세요.");
     const carb = n0($("ps-carb").value), protein = n0($("ps-protein").value), fat = n0($("ps-fat").value);
     const kcal = $("ps-kcal").value !== "" ? Math.round(n0($("ps-kcal").value)) : Math.round(carb * 4 + protein * 4 + fat * 9);
-    lib = { ...lib, mealPresets: [...presets(), { id: "p" + uid(), menu, kcal, carb, protein, fat }] }; saveLib();
+    if (sheetState.photos.some(x => !x.id)) return failMsg("사진을 저장하는 중이에요. 잠시 후 등록하세요.");
+    lib = { ...lib, mealPresets: [...presets(), { id: "p" + uid(), menu, kcal, carb, protein, fat, photo: sheetState.photos[0] ? sheetState.photos[0].id : "" }] }; saveLib();
+    sheetState.photos = []; drawPhotos();
     ["ps-menu","ps-kcal","ps-carb","ps-protein","ps-fat"].forEach(id => $(id).value = ""); $("f-err").hidden = true; draw(); render(); toast(menu + " 등록했어요"); };
 }
 function openMeal(k = cur, id = null) {
@@ -2686,7 +2737,7 @@ function openMeal(k = cur, id = null) {
   showSheet(`<form id="f" class="form" novalidate><h3>${ex ? "식단 수정" : "식단 추가"} · ${md(k)}</h3>
     <div class="row2"><div class="field"><span class="lbl">끼니</span>${seg("meal", ["아침","점심","저녁","간식"], def)}</div>
       <div class="field"><label for="f-at">먹은 시각</label><input id="f-at" type="time" value="${ex ? esc(ex.at || MEAL_DEFAULT_AT[def]) : k === todayKey() ? nowHM() : MEAL_DEFAULT_AT[def]}"></div></div>
-    ${!ex && presets().length ? `<div class="field"><span class="lbl">자주 먹는 식단 · 누르면 바로 추가</span>${presetRow(true)}</div>` : ""}
+    ${!ex ? `<div class="field"><span class="lbl">자주 먹는 식단 · 누르면 바로 추가 <button type="button" class="textbtn inl" id="f-presets">편집</button></span>${presets().length ? presetRow(true) : `<p class="hint">아래 '자주 먹는 식단으로 등록'을 체크하면 다음부터 여기서 한 번에 추가돼요.</p>`}</div>` : ""}
     <div class="field"><label for="f-menu">메뉴</label><input id="f-menu" placeholder="예: 닭가슴살 샐러드, 현미밥" autocomplete="off" value="${v("menu")}"></div>
     <div class="field"><span class="lbl">칼로리 · 탄수화물 · 단백질 · 지방</span>
       <div class="row4">
@@ -2701,7 +2752,8 @@ function openMeal(k = cur, id = null) {
     ${formTail(ex ? "수정" : "저장")}</form>`);
   const old = ex ? [ex.photo, ...(ex.photos || [])].filter(Boolean) : [];
   sheetState.photos = old.map(p => ({ id: p, url: photoSrc(p) })); sheetState.keepAll = old; drawPhotos();
-  if ($("f-del")) $("f-del").onclick = () => { const d = day(k); d.meals = d.meals.filter(m => m.id !== ex.id); days = { ...days, [k]: d }; if (assets) old.forEach(p => assets.delete(p)); closeSheet(true); render(); persist(k); toast("지웠어요"); };
+  if ($("f-del")) $("f-del").onclick = () => { const d = day(k); d.meals = d.meals.filter(m => m.id !== ex.id); days = { ...days, [k]: d }; old.forEach(dropPhoto); closeSheet(true); render(); persist(k); toast("지웠어요"); };
+  if ($("f-presets")) $("f-presets").onclick = () => { closeSheet(); openPresets(); };
   $("f").querySelectorAll("[data-preset]").forEach(b => b.onclick = () => { const meal = sheetState.meal, at = $("f-at").value; closeSheet(); addPreset(b.dataset.preset, meal, at); });
   $("f").querySelector("[data-seg=meal]").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (b && !ex && k !== todayKey()) $("f-at").value = MEAL_DEFAULT_AT[b.dataset.v]; });
   const calc = () => {
@@ -2718,8 +2770,8 @@ function openMeal(k = cur, id = null) {
     const d = day(k), photos = (sheetState.photos || []).map(p => p.id);
     const m = { id: ex ? ex.id : uid(), meal: sheetState.meal, at: $("f-at").value || MEAL_DEFAULT_AT[sheetState.meal], menu, kcal, carb, protein, fat, photos };
     d.meals = ex ? d.meals.map(x => x.id === ex.id ? m : x) : [...d.meals, m];
-    if (ex && assets) old.filter(p => !photos.includes(p)).forEach(p => assets.delete(p));
-    if ($("f-preset").checked && !presets().some(x => x.menu === menu)) { lib = { ...lib, mealPresets: [...presets(), { id: "p" + uid(), menu, kcal, carb, protein, fat }] }; saveLib(); }
+    if (ex) old.filter(p => !photos.includes(p)).forEach(p => setTimeout(() => dropPhoto(p)));
+    if ($("f-preset").checked && !presets().some(x => x.menu === menu)) { lib = { ...lib, mealPresets: [...presets(), { id: "p" + uid(), menu, kcal, carb, protein, fat, photo: photos[0] || "" }] }; saveLib(); }
     days = { ...days, [k]: d }; closeSheet(true); render(); persist(k); toast(ex ? "수정했어요" : "저장했어요");
   });
 }
@@ -2874,7 +2926,7 @@ function openBackup() {
       const ip = inc.lib.profile && typeof inc.lib.profile === "object" ? inc.lib.profile : null;
       const prof = lib.profile || (ip ? { sex: ip.sex === "m" || ip.sex === "f" ? ip.sex : "", birthYear: n0(ip.birthYear) || "", height: n0(ip.height) || "", job: JOBS[ip.job] ? ip.job : "desk", goal: GOAL_PLANS[ip.goal] ? ip.goal : "maintain" } : undefined);
       const sp = [...supps()]; arr(inc.lib.supps).forEach(x => { if (okId(x.id) && str(x.name) && !sp.some(y => y.id === x.id)) sp.push({ id: x.id, since: isDayKey(x.since || "") ? x.since : "", name: x.name, kind: SUPP_KINDS.includes(x.kind) ? x.kind : "영양제", dose: str(x.dose), memo: str(x.memo), times: (Array.isArray(x.times) ? x.times : []).filter(t => SUPP_TIMES.includes(t)), active: x.active !== false }); });
-      const mp = [...presets()]; arr(inc.lib.mealPresets).forEach(x => { if (okId(x.id) && str(x.menu) && !mp.some(y => y.id === x.id)) mp.push({ id: x.id, menu: x.menu, kcal: n0(x.kcal), carb: n0(x.carb), protein: n0(x.protein), fat: n0(x.fat) }); });
+      const mp = [...presets()]; arr(inc.lib.mealPresets).forEach(x => { if (okId(x.id) && str(x.menu) && !mp.some(y => y.id === x.id)) mp.push({ id: x.id, menu: x.menu, kcal: n0(x.kcal), carb: n0(x.carb), protein: n0(x.protein), fat: n0(x.fat), photo: typeof x.photo === "string" && /^[A-Za-z0-9_]{1,64}$/.test(x.photo) ? x.photo : "" }); });
       const ctypes = [...cardioTypes()]; (Array.isArray(inc.lib.cardioTypes) ? inc.lib.cardioTypes : []).forEach(t => { if (str(t) && t.length <= 20 && !ctypes.includes(t)) ctypes.push(t); });
       lib = { ...lib, exercises: ex, routines: rt, mealPresets: mp, cardioTypes: ctypes, supps: sp.filter(x => x.times.length), ...(prof ? { profile: prof } : {}) };
     }
@@ -2964,10 +3016,12 @@ document.addEventListener("click", e => {
   if (ds.wsub) { wsub = ds.wsub; render(); return; }
   if (ds.fsub) { fsub = ds.fsub; render(); return; }
   if (ds.supptoggle) return toggleSupp(ds.supptoggle);
-  if (ds.preset) return addPreset(ds.preset);
   if (ds.drink) { const [ty, ml, abv] = ds.drink.split("|"); return addDrink(ty, ml, abv); }
   if (ds.editsupp) return openSupp(ds.editsupp);
   if (ds.day) { cur = ds.day; renderHome(); const el = document.querySelector(".detail"); if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" }); return; }
+  if (ds.dgo) { const [v, k] = ds.dgo.split(":"); cur = k;
+    if (v === "supp" || v === "drink") { fsub = v; return setView("food"); }
+    if (v === "food") fsub = "meal"; if (v === "work") wsub = "log"; return setView(v); }
   if (ds.editmeal) { const [k, id] = ds.editmeal.split(":"); return openMeal(k, id); }
   if (ds.editdrink) { const [k, id] = ds.editdrink.split(":"); return openDrink(k, id); }
   if (ds.editsleep) return openSleep(ds.editsleep);
@@ -2982,8 +3036,8 @@ document.addEventListener("click", e => {
     const a = ds.act;
     if (a === "startw") openStartSheet(); else if (a === "resume") startSession();
     else if (a === "cardio") openCardio(); else if (a === "meal") openMeal(); else if (a === "sleep") openSleep(t.closest(".glance") ? todayKey() : cur);
-    else if (a === "water") { const w = t.closest("[data-waterday]"); addWater(250, w ? w.dataset.waterday : cur); }
-    else if (a === "watercustom") openWaterCustom();
+    else if (a === "water") { const w = t.closest("[data-waterday]"); addWater(50, w ? w.dataset.waterday : cur); }
+    else if (a === "watercustom") { if (t.closest(".glance")) cur = todayKey(); openWaterCustom(); }
     else if (a === "body") { cur = todayKey(); openBody(); } else if (a === "bodyview") openBodyView(); else if (a === "profile") openProfile(); else if (a === "addsupp") openSupp(null); else if (a === "presets") openPresets(); else if (a === "drinkcustom") openDrink(); else if (a === "backup") openBackup(); else if (a === "newrt") openRoutineEditor(null); else if (a === "newex") openExercise(null);
     else if (a === "today") { cur = todayKey(); render(); }
     else if (a === "calprev" || a === "calnext") { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + (a === "calprev" ? -1 : 1), 1); renderHome(); }
@@ -2997,7 +3051,7 @@ document.addEventListener("click", e => {
     else { const x = d[list].find(x => x.id === id) || {}; gone = [...(x.photos || []), ...(x.photo ? [x.photo] : [])].filter(Boolean); d[list] = d[list].filter(x => x.id !== id); }
     days = { ...days, [k]: d }; render(); persist(k);
     let undone = false;
-    if (gone.length && assets) setTimeout(() => { if (!undone) gone.forEach(pid => assets.delete(pid).catch(() => {})); }, 4500);
+    if (gone.length && assets) setTimeout(() => { if (!undone) gone.forEach(dropPhoto); }, 4500);
     toast("삭제했어요", () => { undone = true; days = { ...days, [k]: before }; render(); persist(k); });
   }
 });
