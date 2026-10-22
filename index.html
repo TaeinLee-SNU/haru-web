@@ -340,6 +340,7 @@ section.weekline { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px
 .dchip small { color: var(--muted); font-weight: 500; }
 .bkwarn { border: 0; width: 100%; text-align: left; background: var(--rec-bg); color: var(--rec-fg); border-radius: var(--r); padding: 12px 16px; display: flex; flex-direction: column; gap: 2px; }
 .bkwarn b { font-size: 14px; } .bkwarn span { font-size: 12px; }
+.dlbadge { display: inline-block; font-style: normal; font-size: 10px; font-weight: 700; background: var(--rec-bg); color: var(--rec-fg); border-radius: 6px; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
 .presets { display: flex; flex-wrap: wrap; gap: 6px; }
 .preset { border: 0; background: var(--food-soft); color: var(--food); border-radius: 999px; padding: 8px 12px; font-weight: 700; font-size: 13px; min-height: 34px; }
 .preset small { font-weight: 500; opacity: .8; margin-left: 2px; }
@@ -1429,8 +1430,10 @@ function trainingAnalysis() {
   const freq = {}; Object.keys(days).filter(k => isDayKey(k) && k > shift(tk, -42)).forEach(k => day(k).workouts.forEach(w => wItems(w).forEach(it => { if (it.sets.some(s => n0(s.kg))) (freq[it.name] = freq[it.name] || []).push({ k, best: Math.max(...it.sets.map(e1rm)) }); })));
   const stalled = Object.entries(freq).filter(([, a]) => a.length >= 4).sort((a, b) => b[1].length - a[1].length).slice(0, 4)
     .filter(([, a]) => { a.sort((x, y) => x.k.localeCompare(y.k)); const recent = a.slice(-3), before = a.slice(0, -3); return Math.max(...recent.map(x => x.best)) <= Math.max(...before.map(x => x.best)); }).map(([n]) => n);
-  if (loadWeeks >= 6 || (loadWeeks >= 4 && stalled.length >= 2))
+  if (loadWeeks >= 6 || (loadWeeks >= 4 && stalled.length >= 2)) {
     out.push(verdict("warn", "디로딩 주간을 추천해요", `${loadWeeks}주 연속 쉬는 주 없이 운동했어요${stalled.length ? ` · ${stalled.join(", ")} 기록이 3회째 제자리예요` : ""}. 이번 주는 무게는 그대로 두고 세트 수를 40~50% 줄여 보세요. 그러면 다음 주기에 더 잘 늘어요`));
+    out.push(`<button class="add solid" data-act="startw">디로딩으로 운동 시작</button>`);
+  }
   else if (stalled.length) out.push(verdict("info", `${stalled.join(", ")} 기록이 제자리예요`, "최근 3회가 그 전 최고 기록(추정 1RM)을 넘지 못했어요. 반복 수를 바꾸거나, 잠과 단백질이 충분한지 확인해 보세요"));
   else if (loadWeeks >= 2) out.push(verdict("good", `${loadWeeks}주째 꾸준히 하고 있어요`, loadWeeks >= 4 ? "보통 4~8주마다 한 주 가볍게(디로딩) 하면 좋아요. 몸이 무겁게 느껴지면 그때가 디로딩 시점이에요" : "지금처럼 이어가세요"));
   return out.join("");
@@ -2106,7 +2109,7 @@ function routinesHTML() {
       ${lib.routines.length ? `<div>${lib.routines.map(r => `<div class="rt">
         <div class="it-main"><b>${esc(r.name)}</b><span>${r.items.length}종목 · ${r.items.reduce((a,i) => a + i.sets.length, 0)}세트</span>
           <div>${partChips(itemsParts(r.items))}</div></div>
-        <div class="btns"><button class="add" data-editrt="${esc(r.id)}">편집</button><button class="add solid" data-startrt="${esc(r.id)}">시작</button></div></div>`).join("")}</div>`
+        <div class="btns"><button class="add" data-editrt="${esc(r.id)}">편집</button><button class="add" data-deloadrt="${esc(r.id)}">디로딩</button><button class="add solid" data-startrt="${esc(r.id)}">시작</button></div></div>`).join("")}</div>`
       : `<p class="empty">자주 하는 운동 묶음을 만들어 두세요.</p>`}
     </section>
     <section class="panel move"><div class="panel-h"><h2><i class="dot"></i>운동 종목${infoBtn("종목을 누르면 이름, 부위, 사진을 고치거나 지울 수 있어요. 지워도 지난 기록은 남아요.")}</h2></div>
@@ -2156,7 +2159,7 @@ function drawWork() {
   const w = work, live = w.kind === "session", items = live ? w.s.items : w.items;
   const title = w.kind === "edit" ? "운동 수정" : w.id ? "루틴 편집" : "새 루틴";
   $("work-h").innerHTML = live
-    ? `<button id="w-min">내리기</button><div class="t"><b>${esc(w.s.name)}</b><span data-clock class="${w.s.pausedAt ? "paused" : ""}">${clock(activeMs(w.s))}</span></div><button class="go" id="w-finish">운동 끝내기</button>`
+    ? `<button id="w-min">내리기</button><div class="t"><b>${esc(w.s.name)}</b>${w.s.deload ? '<em class="dlbadge">디로딩</em>' : ""}<span data-clock class="${w.s.pausedAt ? "paused" : ""}">${clock(activeMs(w.s))}</span></div><button class="go" id="w-finish">운동 끝내기</button>`
     : `<button id="w-cancel">취소</button><div class="t"><b>${title}</b></div><button class="go" id="w-save">저장</button>`;
   const done = items.reduce((a, it) => a + it.sets.filter(s => s.done).length, 0), total = items.reduce((a, it) => a + it.sets.length, 0);
   const vol = itemsVol(items.map(it => ({ ...it, sets: it.sets.filter(s => s.done) })));
@@ -2266,13 +2269,28 @@ function openRoutineEditor(id) {
   const r = id ? lib.routines.find(x => x.id === id) : null;
   openWork({ kind: "routine", id: r ? r.id : null, name: r ? r.name : "", items: r ? clone(r.items) : [] });
 }
-function startSession(routineId) {
+/* Deload: keep the movements and reps, about half the sets and ~90 % of the load — a common way to shed
+   fatigue for a week without losing strength. */
+const roundKg = (v) => v >= 10 ? Math.round(v / 2.5) * 2.5 : Math.round(v * 2) / 2;
+function deloadItems(items) {
+  return items.map(it => {
+    const n = Math.max(1, Math.round(it.sets.length / 2));
+    return { ...it, sets: it.sets.slice(0, n).map(s => ({ ...s, kg: s.kg === "" || s.kg == null ? s.kg : roundKg(n0(s.kg) * 0.9) })),
+      memo: [it.memo, "디로딩"].filter(Boolean).join(" · ") };
+  });
+}
+const plannedVol = (items) => items.reduce((a, it) => a + it.sets.reduce((b, s) => b + n0(s.kg) * n0(s.reps), 0), 0);
+function startSession(routineId, deload = false) {
   closeSheet();
   if (active) { openWork({ kind: "session", s: active }); return; }
   const r = routineId ? lib.routines.find(x => x.id === routineId) : null;
   cur = todayKey();
-  active = { id: uid(), day: cur, start: Date.now(), pausedMs: 0, pausedAt: null, routineId: r ? r.id : null, name: r ? r.name : "자유 운동",
-    items: r ? clone(r.items).map(it => ({ ...it, sets: it.sets.map(s => ({ ...s, done: false })) })) : [] };
+  let items = r ? clone(r.items) : [];
+  if (deload) items = deloadItems(items);
+  active = { id: uid(), day: cur, start: Date.now(), pausedMs: 0, pausedAt: null, routineId: r ? r.id : null, deload,
+    name: r ? r.name + (deload ? " (디로딩)" : "") : "자유 운동",
+    items: items.map(it => ({ ...it, sets: it.sets.map(s => ({ ...s, done: false })) })) };
+  if (deload && r) toast(`디로딩: 계획 볼륨 ${kg(plannedVol(r.items))} → ${kg(plannedVol(items))}kg (세트 ½, 무게 90%)`);
   saveActive(true);
   openWork({ kind: "session", s: active });
 }
@@ -2306,12 +2324,14 @@ function openStartSheet() {
   sheetState = {};
   showSheet(`<div class="form"><h3>웨이트 시작</h3>
     ${lib.routines.length ? `<div>${lib.routines.map(r => `<div class="rt"><div class="it-main"><b>${esc(r.name)}</b><span>${r.items.map(i => esc(i.name)).join(", ") || "종목 없음"}</span></div>
-      <button class="add solid" data-startrt="${esc(r.id)}">시작</button></div>`).join("")}</div>`
+      <div class="btns"><button class="add" data-deloadrt="${esc(r.id)}">디로딩</button><button class="add solid" data-startrt="${esc(r.id)}">시작</button></div></div>`).join("")}</div>
+      <p class="hint">디로딩: 같은 종목·횟수로 세트 절반, 무게 90%${infoBtn("4~8주 꾸준히 운동한 뒤 한 주는 강도를 낮춰 쌓인 피로를 풀어 주는 방법이에요. 세트 수를 40~50% 줄이고 무게는 10% 정도 낮추는 게 흔한 방식이에요. 근력은 유지되고 다음 주기에 더 잘 늘어요.")}</p>`
       : `<p class="hint">저장된 루틴이 없어요. 빈 운동으로 시작하고, 끝낼 때 루틴으로 저장할 수 있어요.</p>`}
     <div class="actions"><button class="cancel" id="f-cancel">닫기</button><button class="save" id="s-empty">빈 운동으로 시작</button></div></div>`);
   $("f-cancel").onclick = () => closeSheet();
   $("s-empty").onclick = () => startSession(null);
   $("sheet").querySelectorAll("[data-startrt]").forEach(b => b.onclick = () => startSession(b.dataset.startrt));
+  $("sheet").querySelectorAll("[data-deloadrt]").forEach(b => b.onclick = () => startSession(b.dataset.deloadrt, true));
 }
 
 function openPicker(onPick) {
@@ -2445,7 +2465,10 @@ function openFinish() {
       <p class="hint">${pausedNow >= 60000 ? `일시정지한 ${Math.round(pausedNow / 60000)}분은 빼고 계산했어요. ` : ""}고쳐도 돼요.</p></div>
     ${assets ? `<div class="field"><span class="lbl">사진</span><div class="photos" id="f-photos"></div></div>` : ""}
     <div class="field"><label for="fn-note">오늘 운동 메모</label><input id="fn-note" placeholder="예: 컨디션 좋음, 어깨 살짝 불편"></div>
-    ${r ? (changed ? `<div class="field diffbox"><span class="lbl">루틴 '${esc(r.name)}'에서 바뀐 점 · 체크한 것만 루틴에 반영돼요</span>
+    ${r && (changed || s.deload) ? `<div class="field"><span class="lbl">루틴 '${esc(r.name)}'은 어떻게 할까요?</span>
+      ${seg("rtmode", ["새 루틴으로 추가", "기존 루틴에 반영", "루틴은 그대로"], s.deload ? "새 루틴으로 추가" : "기존 루틴에 반영")}
+      <input class="inp" id="fn-newname" value="${esc(r.name + (s.deload ? " · 디로딩" : " · 새 버전"))}" aria-label="새 루틴 이름"${s.deload ? "" : " hidden"}></div>` : ""}
+    ${r ? (changed ? `<div class="field diffbox"${s.deload ? " hidden" : ""}><span class="lbl">루틴 '${esc(r.name)}'에서 바뀐 점 · 체크한 것만 루틴에 반영돼요</span>
         ${diff.changes.map((c, i) => `<label class="dchk"><input type="checkbox" data-pick="${i}" checked>
           <span><b>${esc(c.name)}</b> <span class="chip ${c.type === "mod" ? "" : c.type === "add" ? "part" : "ss"}">${c.type === "mod" ? "변경" : c.type === "add" ? "추가" : "제외"}</span><br><span class="hint">${esc(c.desc)}</span></span></label>`).join("")}
         ${diff.orderChanged ? `<label class="dchk"><input type="checkbox" id="fn-order" checked><span><b>종목 순서</b> <span class="chip">변경</span><br><span class="hint">오늘 한 순서로 바꾸기</span></span></label>` : ""}
@@ -2455,6 +2478,10 @@ function openFinish() {
   $("fn-mins").oninput = () => { $("fn-min").textContent = fmtMin(Math.round(n0($("fn-mins").value))); };
   const allBoxes = () => $("sheet").querySelectorAll(".diffbox input[type=checkbox]");
   if ($("fn-all")) { $("fn-all").onclick = () => allBoxes().forEach(b => b.checked = true); $("fn-none").onclick = () => allBoxes().forEach(b => b.checked = false); }
+  const modeSeg = $("sheet").querySelector("[data-seg=rtmode]");
+  if (modeSeg) { sheetState.rtmode = s.deload ? "새 루틴으로 추가" : "기존 루틴에 반영";
+    modeSeg.addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (!b) return; const m = b.dataset.v;
+      $("fn-newname").hidden = m !== "새 루틴으로 추가"; const db = $("sheet").querySelector(".diffbox"); if (db) db.hidden = m !== "기존 루틴에 반영"; }); }
   if ($("fn-asrt")) $("fn-asrt").onchange = e => { $("fn-rtname").hidden = !e.target.checked; if (e.target.checked) $("fn-rtname").focus(); };
   drawPhotos();
   bindForm(() => {
@@ -2469,7 +2496,15 @@ function openFinish() {
     const k = s.day, d = day(k);
     d.workouts = [...d.workouts, entry]; days = { ...days, [k]: d };
     let msg = "운동을 기록했어요";
-    if (r && changed) {
+    const mode = sheetState.rtmode || "기존 루틴에 반영";
+    if (r && mode === "새 루틴으로 추가") {
+      const nm = ($("fn-newname").value || "").trim() || r.name + " · 새 버전", nr = { id: uid(), name: nm, items: cleanItems(s.items) };
+      const idx = lib.routines.findIndex(x => x.id === r.id);
+      lib.routines = [...lib.routines.slice(0, idx + 1), nr, ...lib.routines.slice(idx + 1)]; saveLib();
+      entry.routineId = nr.id; msg = `기록하고 새 루틴 '${nm}'을 추가했어요 (기존 루틴은 그대로)`;
+    } else if (r && mode === "루틴은 그대로") {
+      msg = "기록했어요. 루틴은 바꾸지 않았어요";
+    } else if (r && changed) {
       const picks = new Set([...$("sheet").querySelectorAll("[data-pick]")].filter(b => b.checked).map(b => diff.changes[Number(b.dataset.pick)]));
       const reorder = $("fn-order") ? $("fn-order").checked : false;
       if (picks.size || reorder) {
@@ -2871,6 +2906,7 @@ document.addEventListener("click", e => {
   if (ds.editw) { const [k, id] = ds.editw.split(":"); return openEditWorkout(k, id); }
   if (ds.editrt) return openRoutineEditor(ds.editrt);
   if (ds.startrt) return startSession(ds.startrt);
+  if (ds.deloadrt) return startSession(ds.deloadrt, true);
   if (ds.editex) return openExercise(ds.editex);
   if (ds.act) {
     const a = ds.act;
