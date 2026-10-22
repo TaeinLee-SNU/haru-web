@@ -341,6 +341,16 @@ section.weekline { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px
 .bkwarn { border: 0; width: 100%; text-align: left; background: var(--rec-bg); color: var(--rec-fg); border-radius: var(--r); padding: 12px 16px; display: flex; flex-direction: column; gap: 2px; }
 .bkwarn b { font-size: 14px; } .bkwarn span { font-size: 12px; }
 .dlbadge { display: inline-block; font-style: normal; font-size: 10px; font-weight: 700; background: var(--rec-bg); color: var(--rec-fg); border-radius: 6px; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
+.fatigue { display: grid; grid-template-columns: 140px 1fr; gap: 12px; align-items: center; }
+.gwrap { position: relative; width: 140px; }
+.gauge { width: 140px; height: 80px; display: block; }
+.gscore { display: block; text-align: center; font-size: 16px; font-weight: 800; margin-top: 2px; }
+.gscore small { font-size: 10px; color: var(--muted); font-weight: 600; }
+.fhead { display: flex; flex-direction: column; gap: 4px; }
+.fhead b { font-size: 16px; line-height: 1.35; }
+.t-good { color: var(--up); } .t-warn { color: #C47F00; } .t-bad { color: var(--down); }
+.ffactors { display: flex; flex-wrap: wrap; gap: 6px; }
+@media (prefers-reduced-motion: no-preference) { .needle { transform-origin: 70px 66px; animation: needle .9s cubic-bezier(.3,1.4,.5,1) both; } @keyframes needle { from { transform: rotate(calc(-90deg - var(--a))); } } }
 .presets { display: flex; flex-wrap: wrap; gap: 6px; }
 .preset { border: 0; background: var(--food-soft); color: var(--food); border-radius: 999px; padding: 8px 12px; font-weight: 700; font-size: 13px; min-height: 34px; }
 .preset small { font-weight: 500; opacity: .8; margin-left: 2px; }
@@ -1418,24 +1428,9 @@ function trainingAnalysis() {
   const low = rows.filter(r => r.sets > 0 && r.sets < 10).map(r => r.p), high = rows.filter(r => r.sets > 20).map(r => r.p);
   if (low.length) out.push(verdict("info", `${low.join(", ")}: 최근 7일 세트가 적어요`, "근성장이 목표라면 주 10세트 이상으로 늘려 보세요"));
   if (high.length) out.push(verdict("warn", `${high.join(", ")}: 최근 7일 세트가 많아요`, "주 20세트가 넘으면 회복이 따라오지 못할 수 있어요"));
-  // deload: weeks of steady loading and stalled lifts
-  const ws = weekOf(tk)[0], weekVol = [...Array(10)].map((_, i) => { const s0 = shift(ws, -7 * i), s1 = shift(s0, 6);
-    return Object.keys(days).filter(k => isDayKey(k) && k >= s0 && k <= s1).reduce((a, k) => a + totals(k).vol, 0); });
-  let loadWeeks = 0;
-  for (let i = 1; i < weekVol.length; i++) {
-    const prev = weekVol.slice(i + 1, i + 5).filter(v => v > 0), ref = prev.length ? prev.reduce((a, b) => a + b) / prev.length : weekVol[i];
-    if (weekVol[i] > 0 && weekVol[i] >= ref * 0.6) loadWeeks++; else break;
-  }
-  const e1rm = (s) => n0(s.kg) * (1 + n0(s.reps) / 30);
-  const freq = {}; Object.keys(days).filter(k => isDayKey(k) && k > shift(tk, -42)).forEach(k => day(k).workouts.forEach(w => wItems(w).forEach(it => { if (it.sets.some(s => n0(s.kg))) (freq[it.name] = freq[it.name] || []).push({ k, best: Math.max(...it.sets.map(e1rm)) }); })));
-  const stalled = Object.entries(freq).filter(([, a]) => a.length >= 4).sort((a, b) => b[1].length - a[1].length).slice(0, 4)
-    .filter(([, a]) => { a.sort((x, y) => x.k.localeCompare(y.k)); const recent = a.slice(-3), before = a.slice(0, -3); return Math.max(...recent.map(x => x.best)) <= Math.max(...before.map(x => x.best)); }).map(([n]) => n);
-  if (loadWeeks >= 6 || (loadWeeks >= 4 && stalled.length >= 2)) {
-    out.push(verdict("warn", "디로딩 주간을 추천해요", `${loadWeeks}주 연속 쉬는 주 없이 운동했어요${stalled.length ? ` · ${stalled.join(", ")} 기록이 3회째 제자리예요` : ""}. 이번 주는 무게는 그대로 두고 세트 수를 40~50% 줄여 보세요. 그러면 다음 주기에 더 잘 늘어요`));
-    out.push(`<button class="add solid" data-act="startw">디로딩으로 운동 시작</button>`);
-  }
-  else if (stalled.length) out.push(verdict("info", `${stalled.join(", ")} 기록이 제자리예요`, "최근 3회가 그 전 최고 기록(추정 1RM)을 넘지 못했어요. 반복 수를 바꾸거나, 잠과 단백질이 충분한지 확인해 보세요"));
-  else if (loadWeeks >= 2) out.push(verdict("good", `${loadWeeks}주째 꾸준히 하고 있어요`, loadWeeks >= 4 ? "보통 4~8주마다 한 주 가볍게(디로딩) 하면 좋아요. 몸이 무겁게 느껴지면 그때가 디로딩 시점이에요" : "지금처럼 이어가세요"));
+  // deload timing lives in deloadCard(); here only a one-line pointer when it matters
+  const dl = deloadAssessment();
+  if (dl.level !== "ok") out.push(verdict(dl.level === "now" ? "bad" : "warn", dl.level === "now" ? "디로딩할 때예요" : "곧 디로딩이 필요해요", `피로도 ${dl.score}점: ${dl.factors.map(x => x[1]).join(", ")}. 아래 '피로도 · 디로딩'을 확인하세요`));
   return out.join("");
 }
 
@@ -1969,6 +1964,80 @@ function bodyAnalysis() {
   return out.join("");
 }
 
+/* ---------- fatigue score and deload timing ----------
+   Signals, each worth points:
+   · weeks of loading since the last deload or light week — lifters deload about every 4–8 weeks
+     (Bell et al. 2023, deloading practices survey); 40 y+ sooner;
+   · main lifts stalling or dropping (estimated 1RM, Epley);
+   · acute:chronic workload — last 7 days vs the 4 weeks before; > 1.5 is linked to higher injury risk (Gabbett 2016);
+   · recovery: short sleep, 6+ training days in 7, heavy drinking.
+   0–3 fine, 4–5 deload soon, 6+ deload now. */
+function deloadAssessment() {
+  const tk = todayKey(), P = personal(), f = [];
+  const vol = (a, b) => Object.keys(days).filter(k => isDayKey(k) && k >= a && k <= b).reduce((s, k) => s + totals(k).vol, 0);
+  const isDeloadWeek = (a, b) => Object.keys(days).some(k => isDayKey(k) && k >= a && k <= b && day(k).workouts.some(w => w.deload));
+  const ws = weekOf(tk)[0], weeks = [...Array(12)].map((_, i) => { const a = shift(ws, -7 * i), b = shift(a, 6); return { a, v: vol(a, b), dl: isDeloadWeek(a, b) }; });
+  // consecutive loading weeks, counting the current week only once it has training
+  let loadWeeks = 0;
+  for (let i = weeks[0].v > 0 ? 0 : 1; i < weeks.length; i++) {
+    const w = weeks[i], prev = weeks.slice(i + 1, i + 5).filter(x => x.v > 0), ref = prev.length ? prev.reduce((a, x) => a + x.v, 0) / prev.length : w.v;
+    if (w.v > 0 && !w.dl && w.v >= ref * 0.6) loadWeeks++; else break;
+  }
+  const lastDeload = weeks.find((w, i) => i > 0 && (w.dl || (w.v > 0 && w.v < 0.6 * (weeks.slice(i + 1, i + 5).filter(x => x.v).reduce((a, x) => a + x.v, 0) / Math.max(1, weeks.slice(i + 1, i + 5).filter(x => x.v).length)))));
+  const cycle = P.age >= 40 ? [4, 6] : [5, 8];
+  if (loadWeeks >= cycle[1]) f.push([3, `${loadWeeks}주째 쉬는 주 없음`]);
+  else if (loadWeeks >= cycle[0]) f.push([2, `${loadWeeks}주째 쉬는 주 없음`]);
+  else if (loadWeeks >= cycle[0] - 1) f.push([1, `${loadWeeks}주째 운동 중`]);
+  // lifts: best e1RM in the last 2 sessions vs everything before (last 8 weeks)
+  const e1rm = (s) => n0(s.kg) * (1 + n0(s.reps) / 30), hist = {};
+  Object.keys(days).filter(k => isDayKey(k) && k > shift(tk, -56)).sort().forEach(k => day(k).workouts.forEach(w => { if (w.deload) return;
+    wItems(w).forEach(it => { if (it.sets.some(s => n0(s.kg))) (hist[it.name] = hist[it.name] || []).push(Math.max(...it.sets.map(e1rm))); }); }));
+  const main = Object.entries(hist).filter(([, a]) => a.length >= 4).sort((a, b) => b[1].length - a[1].length).slice(0, 4);
+  const dropped = [], stalled = [];
+  main.forEach(([n, a]) => { const recent = Math.max(...a.slice(-2)), best = Math.max(...a.slice(0, -2));
+    if (recent < best * 0.95) dropped.push(n); else if (Math.max(...a.slice(-3)) <= Math.max(...a.slice(0, -3))) stalled.push(n); });
+  if (dropped.length) f.push([Math.min(3, dropped.length + 1), `기록 하락: ${dropped.join(", ")}`]);
+  if (stalled.length >= 2) f.push([2, `기록 정체: ${stalled.join(", ")}`]); else if (stalled.length) f.push([1, `기록 정체: ${stalled[0]}`]);
+  // acute:chronic workload
+  // only meaningful with a real 4-week base: at least 3 of those weeks trained
+  const baseWeeks = [1, 2, 3, 4].filter(i => vol(shift(tk, -7 * i - 6), shift(tk, -7 * i)) > 0).length;
+  const acute = vol(shift(tk, -6), tk), chronic = vol(shift(tk, -34), shift(tk, -7)) / 4, acwr = chronic && baseWeeks >= 3 ? acute / chronic : 0;
+  if (acwr > 1.5) f.push([2, `이번 주 볼륨 급증 (평소의 ${acwr.toFixed(1)}배)`]); else if (acwr > 1.3) f.push([1, `이번 주 볼륨 증가 (평소의 ${acwr.toFixed(1)}배)`]);
+  // recovery
+  const sl = last7().map(k => day(k).sleep).filter(Boolean).map(sleepHours), avgSl = sl.length >= 3 ? sl.reduce((a, b) => a + b) / sl.length : 0;
+  if (avgSl && avgSl < 6) f.push([2, `수면 부족 (평균 ${fmtH(avgSl)})`]); else if (avgSl && avgSl < sleepMin()) f.push([1, `수면 조금 부족 (평균 ${fmtH(avgSl)})`]);
+  const trainDays = last7().filter(k => day(k).workouts.some(w => w.cat !== "유산소")).length;
+  if (trainDays >= 6) f.push([1, `최근 7일 중 ${trainDays}일 웨이트`]);
+  const binges = last7().filter(k => dayAlcohol(k).g >= bingeG()).length;
+  if (binges) f.push([1, `과음 ${binges}회`]);
+  const score = f.reduce((a, x) => a + x[0], 0);
+  const level = score >= 6 ? "now" : score >= 4 ? "soon" : "ok";
+  const base = lastDeload ? lastDeload.a : weeks[Math.min(weeks.length - 1, loadWeeks)].a;
+  const next = shift(base, 7 * (cycle[0] + 1));
+  return { score, level, factors: f, loadWeeks, cycle, acwr, next: next > tk ? next : tk, trained: weeks.some(w => w.v > 0) };
+}
+function fatigueGauge(score) {
+  const max = 10, v = Math.min(max, score), R = 52, cx = 70, cy = 66;
+  const pt = (t, r = R) => { const a = Math.PI * (1 - t); return [cx + r * Math.cos(a), cy - r * Math.sin(a)]; };
+  const arc = (t0, t1, color) => { const [x0, y0] = pt(t0), [x1, y1] = pt(t1); return `<path d="M${x0.toFixed(1)} ${y0.toFixed(1)} A${R} ${R} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}" fill="none" stroke="${color}" stroke-width="12"></path>`; };
+  const [nx, ny] = pt(v / max, R - 16);
+  return `<svg viewBox="0 0 140 80" class="gauge" aria-label="피로도 ${score}점">
+    ${arc(0, 0.38, "var(--up)")}${arc(0.40, 0.58, "#E89B0C")}${arc(0.60, 1, "var(--down)")}
+    <line class="needle" x1="${cx}" y1="${cy}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="var(--ink)" stroke-width="3" stroke-linecap="round" style="--a:${(v / max * 180 - 90).toFixed(0)}deg"></line>
+    <circle cx="${cx}" cy="${cy}" r="5" fill="var(--ink)"></circle></svg>`;
+}
+function deloadCard() {
+  const d = deloadAssessment();
+  if (!d.trained) return "";
+  const head = { now: ["디로딩할 때예요", "bad"], soon: ["1~2주 안에 디로딩을 계획하세요", "warn"], ok: ["지금은 계속 운동해도 좋아요", "good"] }[d.level];
+  return `<section class="panel move"><div class="panel-h"><h2><i class="dot"></i>피로도 · 디로딩${infoBtn("여러 피로 신호를 점수로 합쳐요 (0~3 괜찮음, 4~5 곧, 6 이상 지금).<br>· 쉬는 주 없이 이어진 기간: 보통 4~8주마다 디로딩해요 (Bell 외, 2023). 40세 이상은 4~6주.<br>· 주요 종목 추정 1RM이 정체되거나 5% 넘게 떨어짐<br>· 최근 1주 볼륨이 평소 4주 평균의 1.3배·1.5배 초과 (급성:만성 부하 비율, Gabbett 2016)<br>· 수면 부족, 주 6일 이상 웨이트, 과음<br>디로딩은 같은 종목·횟수로 세트를 40~50%, 무게를 10% 정도 줄이는 한 주예요.")}</h2></div>
+    <div class="fatigue"><div class="gwrap">${fatigueGauge(d.score)}<span class="gscore t-${head[1]}">${d.score > 10 ? "10+" : d.score}<small>/10</small></span></div>
+      <div class="fhead"><b class="t-${head[1]}">${head[0]}</b><span class="hint">${d.level === "ok" ? `다음 디로딩 예상 ${md(d.next)}쯤` : `쉬는 주 없이 ${d.loadWeeks}주째`}</span></div></div>
+    ${d.factors.length ? `<div class="ffactors">${d.factors.map(([p, l]) => `<span class="chip ${p >= 2 ? "ss" : ""}">${esc(l)} +${p}</span>`).join("")}</div>` : ""}
+    ${d.level !== "ok" ? `<button class="add solid" data-act="startw">디로딩으로 운동 시작</button>` : ""}
+  </section>`;
+}
+
 /* ---------- per-part history ---------- */
 const partHistory = memo(partHistoryRaw);
 function partHistoryRaw(part) {
@@ -2058,6 +2127,7 @@ function renderWork() {
       <div class="btns"><button class="add solid" data-act="startw">${active ? "운동 이어하기" : "웨이트 시작"}</button><button class="add" data-act="cardio">+ 유산소</button></div></div>
       ${w ? `<ul class="items">${w}</ul>` : `<p class="empty">아직 운동 기록이 없어요.</p>`}</section>
     <section class="panel move"><div class="panel-h"><h2><i class="dot"></i>웨이트 분석</h2></div>${bodyMap(false)}${missingNote(["나이","체중"])}${trainingAnalysis()}</section>
+    ${deloadCard()}
     <section class="panel move"><div class="panel-h"><h2><i class="dot"></i>부위별 기록${infoBtn("큰 숫자는 최근 7일 중 그 부위를 운동한 날 수예요.<br>아래 %는 최근 4주 볼륨이 그 전 4주보다 늘었는지예요.<br>부위를 누르면 그동안 기록과 그래프가 나와요.")}</h2></div>
       <div class="partgrid">${PARTS.filter(p => p !== "기타" || partHistory(p).length).map(p => { const tr = partTrend(p); return `<button class="${partDays[p] ? "on" : ""}" data-part="${p}"><b>${partDays[p]}</b>${p}<span class="tr ${tr.cls}">${tr.txt}</span></button>`; }).join("")}</div></section>
     ${chart("move", "볼륨", "kg", ts.map(x => x.vol), 0, tv)}
@@ -2490,7 +2560,7 @@ function openFinish() {
     const st = $("fn-start").value || hhmm(s.start), en = $("fn-end").value || hhmm(Date.now());
     const startD = new Date(s.start); const [sh, sm] = st.split(":").map(Number); startD.setHours(sh, sm, 0, 0);
     const mins = Math.max(1, Math.round(n0($("fn-mins").value))) || 1;
-    const entry = { id: s.id, cat: "웨이트", name: s.name, routineId: s.routineId, start: startD.getTime(), end: startD.getTime() + spanMin(st, en) * 60000, min: mins, pausedMin: Math.round(pausedNow / 60000),
+    const entry = { id: s.id, cat: "웨이트", name: s.name, routineId: s.routineId, deload: !!s.deload, start: startD.getTime(), end: startD.getTime() + spanMin(st, en) * 60000, min: mins, pausedMin: Math.round(pausedNow / 60000),
       items: cleanItems(items).map(it => ({ ...it, sets: it.sets.map(x => ({ kg: n0(x.kg), reps: n0(x.reps) })) })),
       photos: sheetState.photos.map(p => p.id), note: $("fn-note").value.trim() };
     const k = s.day, d = day(k);
@@ -2781,7 +2851,7 @@ function openBackup() {
     const items = (x) => arr(x).filter(it => str(it.name)).map(it => ({ name: str(it.name), part: PARTS.includes(it.part) || it.part === "팔" ? it.part : partOf(it.name), ss: !!it.ss, memo: str(it.memo), sets: sets(it.sets) }));
     const ids = (x) => arr(x).length ? [] : (Array.isArray(x) ? x.filter(i => typeof i === "string" && /^[A-Za-z0-9_]{1,64}$/.test(i)) : []);
     const okId = (i) => typeof i === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(i);
-    const workout = (w) => ({ intensity: ["낮음","보통","높음"].includes(w.intensity) ? w.intensity : undefined, kcal: n0(w.kcal), hr: n0(w.hr) <= 220 ? n0(w.hr) : 0, start: n0(w.start) || undefined, end: n0(w.end) || undefined, routineId: okId(w.routineId) ? w.routineId : null, pausedMin: n0(w.pausedMin), id: okId(w.id) ? w.id : uid(), cat: w.cat === "유산소" ? "유산소" : "웨이트", name: str(w.name), type: str(w.type), note: str(w.note), min: n0(w.min), dist: n0(w.dist),
+    const workout = (w) => ({ deload: w.deload === true || undefined, intensity: ["낮음","보통","높음"].includes(w.intensity) ? w.intensity : undefined, kcal: n0(w.kcal), hr: n0(w.hr) <= 220 ? n0(w.hr) : 0, start: n0(w.start) || undefined, end: n0(w.end) || undefined, routineId: okId(w.routineId) ? w.routineId : null, pausedMin: n0(w.pausedMin), id: okId(w.id) ? w.id : uid(), cat: w.cat === "유산소" ? "유산소" : "웨이트", name: str(w.name), type: str(w.type), note: str(w.note), min: n0(w.min), dist: n0(w.dist),
       items: Array.isArray(w.items) ? items(w.items) : undefined, sets: Array.isArray(w.sets) ? sets(w.sets) : undefined, photos: ids(w.photos) });
     const meal = (m) => ({ at: typeof m.at === "string" && /^\d{2}:\d{2}$/.test(m.at) ? m.at : undefined, id: okId(m.id) ? m.id : uid(), meal: ["아침","점심","저녁","간식"].includes(m.meal) ? m.meal : "간식", menu: str(m.menu) || "음식", kcal: n0(m.kcal), carb: n0(m.carb), protein: n0(m.protein), fat: n0(m.fat), photos: ids(m.photos) });
     const hm = (t) => typeof t === "string" && /^\d{2}:\d{2}$/.test(t);
