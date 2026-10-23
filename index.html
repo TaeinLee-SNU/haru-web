@@ -1015,7 +1015,7 @@ function weightEntry(x, k, ro) {
     ${ro ? "<span></span>" : `<button class="del" data-del="${k}:workouts:${esc(x.id)}" aria-label="삭제">×</button>`}</li>`;
 }
 function cardioEntry(x, k, ro) {
-  const bits = [x.intensity && x.intensity !== "보통" ? "강도 " + esc(x.intensity) : "", x.dist ? n0(x.dist) + "km" : "", x.kcal ? n0(x.kcal) + "kcal" : "", x.hr ? n0(x.hr) + "bpm" : "", x.note ? esc(x.note) : ""].filter(Boolean);
+  const bits = [x.intensity && x.intensity !== "보통" ? "강도 " + esc(x.intensity) : "", x.dist ? n0(x.dist) + "km" : "", x.kcal ? (x.kauto ? "약 " : "") + n0(x.kcal) + "kcal" : (cardioKcal(x) ? "약 " + cardioKcal(x).kcal + "kcal" : ""), x.hr ? n0(x.hr) + "bpm" : "", x.note ? esc(x.note) : ""].filter(Boolean);
   return `<li><div class="it-main"><b>${esc(x.type)}</b><span><span class="chip">유산소</span>${bits.join(" · ")}</span>
     ${x.photos && x.photos.length ? `<div class="it-photos">${photoBtns(x.photos)}</div>` : ""}</div>
     <button class="textbtn" data-editc="${k}:${esc(x.id)}">수정</button></div>
@@ -1936,6 +1936,44 @@ setInterval(() => { const f = fastingNow(); if (f) document.querySelectorAll("[d
 
 /* ---------- cardio types the user manages ---------- */
 const cardioTypes = () => lib.cardioTypes || CARDIO;
+/* cardio energy: 2024 Adult Compendium of Physical Activities METs (kcal = MET × kg × h).
+   With distance, walking/running/cycling use the speed rows; otherwise the 낮음/보통/높음 row for the activity.
+   With an average heart rate (≥ 90 bpm) and sex, age and weight known, Keytel et al. 2005 is used instead. */
+const MET_ROWS = [
+  [/걷|산책|워킹/, [2.8, 3.5, 5.0], [[3.2, 2.8], [4.0, 3.0], [4.8, 3.5], [5.6, 4.3], [6.4, 5.0], [7.2, 7.0], [8.0, 8.3]]],
+  [/달리|러닝|조깅|뛰/, [7.0, 9.8, 11.5], [[6.4, 6.5], [8.0, 8.5], [9.7, 9.3], [10.8, 10.5], [11.3, 11.0], [12.9, 11.8], [14.5, 12.8], [16.1, 14.8], [17.7, 16.8]]],
+  [/자전거|사이클|싸이클|스피닝|바이크/, [4.0, 6.8, 9.5], [[12, 3.5], [16, 5.8], [19, 6.8], [22, 8.0], [25, 10.0], [30, 12.0], [35, 15.8]]],
+  [/계단|스텝|스테어/, [5.0, 8.8, 11.0]],
+  [/로잉|조정|노젓/, [4.8, 7.0, 8.5]],
+  [/수영|아쿠아/, [5.8, 8.3, 10.0]],
+  [/줄넘기/, [8.8, 11.0, 12.3]],
+  [/등산|하이킹|트레킹/, [5.3, 6.5, 7.8]],
+  [/일립|엘립|크로스.?트레이너/, [4.6, 5.0, 6.5]],
+  [/테니스/, [5.0, 6.8, 8.0]], [/배드민턴/, [4.5, 5.5, 7.0]], [/축구|풋살/, [7.0, 8.0, 10.0]], [/농구/, [6.0, 6.5, 8.0]],
+  [/복싱|킥복싱|격투|주짓수/, [5.5, 7.8, 10.0]], [/크로스핏|서킷|버피|HIIT|인터벌/i, [6.0, 8.0, 10.0]],
+  [/요가/, [2.3, 2.8, 4.0]], [/필라테스/, [2.8, 3.0, 4.0]], [/스트레칭/, [2.3, 2.3, 2.8]], [/댄스|줌바|에어로빅/, [5.0, 6.5, 8.0]],
+  [/골프/, [3.5, 4.8, 5.3]], [/스키|보드/, [4.3, 5.3, 8.0]], [/클라이밍|암벽|볼더/, [5.8, 7.5, 9.0]], [/스케이트|인라인/, [5.0, 7.0, 9.0]],
+];
+function cardioMet(w) {
+  const lv = w.intensity === "낮음" ? 0 : w.intensity === "높음" ? 2 : 1, row = MET_ROWS.find(r => r[0].test(w.type || ""));
+  const kmh = n0(w.dist) && n0(w.min) ? n0(w.dist) / (n0(w.min) / 60) : 0;
+  if (row && row[2] && kmh > 0) {
+    const t = row[2]; if (kmh <= t[0][0]) return { met: t[0][1], how: `${kmh.toFixed(1)}km/h` };
+    for (let i = 1; i < t.length; i++) if (kmh <= t[i][0]) { const [a, ma] = t[i - 1], [b, mb] = t[i]; return { met: ma + (mb - ma) * (kmh - a) / (b - a), how: `${kmh.toFixed(1)}km/h` }; }
+    return { met: t[t.length - 1][1], how: `${kmh.toFixed(1)}km/h` };
+  }
+  return { met: (row ? row[1] : [3.5, 5.0, 7.0])[lv], how: `강도 ${["낮음","보통","높음"][lv]}${row ? "" : " · 일반 운동 기준"}` };
+}
+function cardioKcal(w) {
+  const { w: kgW, age, sex } = personal(), min = n0(w.min); if (!kgW || !min) return null;
+  const hr = n0(w.hr);
+  if (hr >= 90 && hr <= 200 && age && (sex === "m" || sex === "f")) {
+    const perMin = sex === "m" ? (-55.0969 + 0.6309 * hr + 0.1988 * kgW + 0.2017 * age) / 4.184 : (-20.4022 + 0.4472 * hr - 0.1263 * kgW + 0.074 * age) / 4.184;
+    if (perMin > 0) return { kcal: Math.round(perMin * min), how: `심박 ${hr}bpm · 체중 ${kgW}kg · ${age}세 (Keytel 공식)` };
+  }
+  const m = cardioMet(w);
+  return { kcal: Math.round(m.met * kgW * min / 60), how: `MET ${m.met.toFixed(1)} (${m.how}) × 체중 ${kgW}kg × ${min}분` };
+}
 
 /* ---------- personal baseline used by every analysis ---------- */
 function personal() {
@@ -2644,12 +2682,20 @@ function openCardio(k = cur, id = null) {
     <div class="row2"><div class="field"><label for="f-min">시간 (분)</label><input id="f-min" type="number" inputmode="numeric" min="1" max="600" value="${ex ? n0(ex.min) : 30}"></div>
       <div class="field"><label for="f-dist">거리 (km)</label><input id="f-dist" type="number" inputmode="decimal" min="0" step="0.1" placeholder="선택" value="${ex && ex.dist ? n0(ex.dist) : ""}"></div></div>
     <div class="field"><span class="lbl">강도</span>${seg("intensity", ["낮음","보통","높음"], sheetState.intensity)}</div>
-    <div class="row2"><div class="field"><label for="f-kcal2">소모 칼로리 (kcal)</label><input id="f-kcal2" type="number" inputmode="numeric" min="0" placeholder="선택" value="${ex && ex.kcal ? n0(ex.kcal) : ""}"></div>
+    <div class="row2"><div class="field"><label for="f-kcal2">소모 칼로리 (kcal)</label><input id="f-kcal2" type="number" inputmode="numeric" min="0" placeholder="자동" value="${ex && ex.kcal && !ex.kauto ? n0(ex.kcal) : ""}"></div>
       <div class="field"><label for="f-hr">평균 심박 (bpm)</label><input id="f-hr" type="number" inputmode="numeric" min="40" max="220" placeholder="선택" value="${ex && ex.hr ? n0(ex.hr) : ""}"></div></div>
+    <p class="hint" id="f-kauto"></p>
     ${assets ? `<div class="field"><span class="lbl">사진</span><div class="photos" id="f-photos"></div></div>` : ""}
     <div class="field"><label for="f-note">메모</label><input id="f-note" placeholder="예: 경사 5%, 인터벌" value="${ex ? esc(ex.note || "") : ""}"></div>
     ${formTail(ex ? "수정" : "저장")}</form>`);
-  drawTypes(); drawPhotos();
+  const typeNow = () => $("f-ctype").value.trim() || sheetState.cardio;
+  const autoK = () => cardioKcal({ type: typeNow(), min: $("f-min").value, dist: $("f-dist").value, intensity: sheetState.intensity, hr: $("f-hr").value });
+  const showAuto = () => { if (!$("f-kauto")) return; const a = autoK(), typed = $("f-kcal2").value !== "";
+    $("f-kcal2").placeholder = a ? "자동 " + a.kcal : "자동";
+    $("f-kauto").innerHTML = a ? `${typed ? "직접 입력한 값으로 저장해요 · " : ""}자동 계산 <b>${a.kcal}kcal</b>${infoBtn(esc(a.how) + "<br>칸을 비워 두면 이 값으로 저장돼요. 워치 값이 있으면 직접 입력하세요.<br>MET: 2024 신체활동 개요(Compendium) 기준")}`
+      : "몸 기록에 체중을 입력하면 칼로리를 자동으로 계산해요."; };
+  drawTypes(); drawPhotos(); showAuto();
+  $("f").addEventListener("input", showAuto); $("f").addEventListener("click", () => setTimeout(showAuto));
   $("ct-types").onclick = e => {
     if (e.target.closest("#ct-edit")) { sheetState.editTypes = !sheetState.editTypes; drawTypes(); return; }
     const b = e.target.closest("[data-v]"); if (!b) return;
@@ -2663,7 +2709,8 @@ function openCardio(k = cur, id = null) {
     if (sheetState.photos.some(p => !p.id)) return failMsg("사진을 저장하는 중이에요. 잠시 후 저장하세요.");
     if (typed && !cardioTypes().includes(typed)) { lib = { ...lib, cardioTypes: [...cardioTypes(), typed] }; saveLib(); }
     const hr = Math.round(n0($("f-hr").value));
-    const entry = { id: ex ? ex.id : uid(), cat: "유산소", type, min, dist: n0($("f-dist").value), intensity: sheetState.intensity, kcal: Math.round(n0($("f-kcal2").value)),
+    const typedK = $("f-kcal2").value !== "", a = typedK ? null : autoK();
+    const entry = { id: ex ? ex.id : uid(), cat: "유산소", type, min, dist: n0($("f-dist").value), intensity: sheetState.intensity, kcal: typedK ? Math.round(n0($("f-kcal2").value)) : a ? a.kcal : 0, kauto: !typedK && a ? true : undefined,
       hr: hr >= 40 && hr <= 220 ? hr : 0, photos: sheetState.photos.map(p => p.id), note: $("f-note").value.trim() };
     if (ex && assets) (ex.photos || []).filter(p => !entry.photos.includes(p)).forEach(p => assets.delete(p));
     const d = day(k);
@@ -2903,7 +2950,7 @@ function openBackup() {
     const items = (x) => arr(x).filter(it => str(it.name)).map(it => ({ name: str(it.name), part: PARTS.includes(it.part) || it.part === "팔" ? it.part : partOf(it.name), ss: !!it.ss, memo: str(it.memo), sets: sets(it.sets) }));
     const ids = (x) => arr(x).length ? [] : (Array.isArray(x) ? x.filter(i => typeof i === "string" && /^[A-Za-z0-9_]{1,64}$/.test(i)) : []);
     const okId = (i) => typeof i === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(i);
-    const workout = (w) => ({ deload: w.deload === true || undefined, intensity: ["낮음","보통","높음"].includes(w.intensity) ? w.intensity : undefined, kcal: n0(w.kcal), hr: n0(w.hr) <= 220 ? n0(w.hr) : 0, start: n0(w.start) || undefined, end: n0(w.end) || undefined, routineId: okId(w.routineId) ? w.routineId : null, pausedMin: n0(w.pausedMin), id: okId(w.id) ? w.id : uid(), cat: w.cat === "유산소" ? "유산소" : "웨이트", name: str(w.name), type: str(w.type), note: str(w.note), min: n0(w.min), dist: n0(w.dist),
+    const workout = (w) => ({ deload: w.deload === true || undefined, intensity: ["낮음","보통","높음"].includes(w.intensity) ? w.intensity : undefined, kcal: n0(w.kcal), kauto: w.kauto === true || undefined, hr: n0(w.hr) <= 220 ? n0(w.hr) : 0, start: n0(w.start) || undefined, end: n0(w.end) || undefined, routineId: okId(w.routineId) ? w.routineId : null, pausedMin: n0(w.pausedMin), id: okId(w.id) ? w.id : uid(), cat: w.cat === "유산소" ? "유산소" : "웨이트", name: str(w.name), type: str(w.type), note: str(w.note), min: n0(w.min), dist: n0(w.dist),
       items: Array.isArray(w.items) ? items(w.items) : undefined, sets: Array.isArray(w.sets) ? sets(w.sets) : undefined, photos: ids(w.photos) });
     const meal = (m) => ({ at: typeof m.at === "string" && /^\d{2}:\d{2}$/.test(m.at) ? m.at : undefined, id: okId(m.id) ? m.id : uid(), meal: ["아침","점심","저녁","간식"].includes(m.meal) ? m.meal : "간식", menu: str(m.menu) || "음식", kcal: n0(m.kcal), carb: n0(m.carb), protein: n0(m.protein), fat: n0(m.fat), photos: ids(m.photos) });
     const hm = (t) => typeof t === "string" && /^\d{2}:\d{2}$/.test(t);
