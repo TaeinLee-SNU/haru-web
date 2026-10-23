@@ -384,6 +384,10 @@ button.tgt:disabled { cursor: default; color: inherit; opacity: 1; }
 .preset img { width: 22px; height: 22px; border-radius: 6px; object-fit: cover; margin: -4px 6px -4px -4px; vertical-align: middle; }
 .textbtn.inl { display: inline; min-height: 0; padding: 0 0 0 6px; font-size: 12px; }
 .tapsip { font-size: 11px; }
+.sweat { display: flex; align-items: center; gap: 4px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.sweat span { margin-right: 2px; }
+.sweat button { border: 0; background: var(--fill); color: var(--muted); font-size: 12px; font-weight: 600; border-radius: 8px; padding: 4px 9px; min-height: 28px; }
+.sweat button[aria-pressed="true"] { background: var(--water); color: #fff; }
 .presets { display: flex; flex-wrap: wrap; gap: 6px; }
 .preset { border: 0; background: var(--food-soft); color: var(--food); border-radius: 999px; padding: 8px 12px; font-weight: 700; font-size: 13px; min-height: 34px; }
 .preset small { font-weight: 500; opacity: .8; margin-left: 2px; }
@@ -852,7 +856,7 @@ function fmtMin(m) { return m >= 60 ? Math.floor(m/60) + "시간" + (m%60 ? " " 
 const kg = (v) => Math.round(v).toLocaleString();
 const setTxt = (s) => `${n0(s.kg) ? n0(s.kg) + "kg" : "맨몸"}×${n0(s.reps)}`;
 
-function day(k) { const d = days[k] || {}; return { workouts: d.workouts || [], meals: d.meals || [], sleep: d.sleep || null, body: d.body || null, supps: d.supps && typeof d.supps === "object" ? d.supps : {}, water: Array.isArray(d.water) ? d.water : [], drinks: Array.isArray(d.drinks) ? d.drinks : [] }; }
+function day(k) { const d = days[k] || {}; return { workouts: d.workouts || [], meals: d.meals || [], sleep: d.sleep || null, body: d.body || null, supps: d.supps && typeof d.supps === "object" ? d.supps : {}, water: Array.isArray(d.water) ? d.water : [], drinks: Array.isArray(d.drinks) ? d.drinks : [], sweat: ["적음","보통","많이"].includes(d.sweat) ? d.sweat : undefined }; }
 function activeMs(s) { return (s.pausedAt || Date.now()) - s.start - (s.pausedMs || 0); }
 function partOf(name) { const e = lib.exercises.find(x => x.name === name); return e ? e.part : "기타"; }
 function wItems(w) {
@@ -1601,6 +1605,7 @@ function waterCard(k, compact) {
     <div class="wc-info"><span class="k">물</span><span class="v"><b class="wml">${(ml / 1000).toFixed(2)}</b><small>/ ${(goal / 1000).toFixed(1)}L</small></span>
       <span class="hint wleft">${ml >= goal ? "오늘 목표 달성!" : `${Math.ceil((goal - ml) / 250)}컵 더 (250ml 기준)`}</span>
       <div class="btns">${compact ? "" : `<button class="add" data-water="50">+ 한 모금</button>`}<button class="add" data-water="250">+ 1컵</button><button class="add" data-water="500">+ 500ml</button><button class="add" data-act="watercustom">직접</button></div>
+      ${day(k).workouts.length ? `<div class="sweat"><span>운동 땀</span>${Object.keys(SWEAT_X).map(v => `<button type="button" data-sweat="${v}" aria-pressed="${(day(k).sweat || "보통") === v}">${v}</button>`).join("")}</div>` : ""}
       <span class="hint tapsip">비커를 누르면 한 모금(50ml)</span></div></div>`;
 }
 function refreshWater() {
@@ -1996,17 +2001,21 @@ function sleepNeed() {
 }
 const sleepMin = () => { const { age } = personal(); return age && age < 18 ? 8 : 7; };
 /* water: total drinks per day. EFSA adequate intake for total water is 2.5 L (men) / 2.0 L (women), about 80 % from
-   drinks; 30–35 ml/kg covers larger bodies. Sweat losses ~0.5–1 L per hour of exercise (ACSM), so training adds by
-   minutes and intensity; high protein (> 2 g/kg) raises urea to excrete; creatine draws water into muscle; each
+   drinks; 30–35 ml/kg covers larger bodies, and already includes ordinary daily activity. Sweat rates vary from
+   ~0.3 to over 2 L/h with intensity, heat and the person (ACSM 2007; Baker 2017), and lifting with rests sweats little,
+   so training adds a modest amount (cardio 3/6/9 ml/min by intensity, weights 3 ml/min) that the user scales by how
+   much they actually sweated (적음 ×0.3, 많이 ×2); high protein (> 2 g/kg) raises urea to excrete; creatine draws water into muscle; each
    standard drink of alcohol adds a glass. */
+const SWEAT_X = { "적음": 0.3, "보통": 1, "많이": 2 };
 function waterPlan(k) {
   const P = personal(), parts = [];
   const efsa = P.sex === "f" ? 1600 : P.sex === "m" ? 2000 : 1800, byW = P.w ? Math.round(P.w * 33) : 0;
   const base = Math.max(efsa, byW);
   parts.push(["기본", base, byW > efsa ? `체중 ${P.w}kg × 33ml` : `${P.sex === "f" ? "여성" : P.sex === "m" ? "남성" : "성인"} 권장량(EFSA) 기준`]);
   const d = day(k);
-  const exMl = d.workouts.reduce((a, w) => a + n0(w.min) * (w.intensity === "높음" ? 16 : w.intensity === "낮음" ? 8 : 12), 0);
-  if (exMl) parts.push(["운동", Math.round(exMl / 50) * 50, `${d.workouts.reduce((a, w) => a + n0(w.min), 0)}분 운동 땀 손실 보충`]);
+  const sw = d.sweat || "보통", mult = SWEAT_X[sw];
+  const exMl = d.workouts.reduce((a, w) => a + n0(w.min) * (w.cat !== "유산소" ? 3 : w.intensity === "높음" ? 9 : w.intensity === "낮음" ? 3 : 6), 0) * mult;
+  if (exMl >= 50) parts.push(["운동", Math.round(exMl / 50) * 50, `${d.workouts.reduce((a, w) => a + n0(w.min), 0)}분 운동 · 땀 ${sw} 기준`]);
   const prot = totals(k).protein;
   if (P.w && prot > P.w * 2) parts.push(["고단백", 250, `단백질 ${prot}g (체중 1kg당 ${(prot / P.w).toFixed(1)}g)`]);
   const crea = supps().find(s => /크레아틴|creatine/i.test(s.name) && (s.times.some(t => d.supps[suppKey(s.id, t)]) || (s.active !== false && k === todayKey())));
@@ -2961,10 +2970,10 @@ function openBackup() {
         body: v.body && n0(v.body.weight) ? { weight: n0(v.body.weight), muscle: n0(v.body.muscle), fat: n0(v.body.fat) } : null,
         supps: v.supps && typeof v.supps === "object" ? Object.fromEntries(Object.entries(v.supps).filter(([kk, vv]) => /^[A-Za-z0-9_-]{1,64}@[가-힣 ]{2,5}$/.test(kk) && n0(vv)).map(([kk, vv]) => [kk, n0(vv)])) : {},
         drinks: arr(v.drinks).filter(x => DRINKS[x.type] && n0(x.ml) > 0 && n0(x.ml) <= 5000 && n0(x.abv) <= 70).map(x => ({ id: okId(x.id) ? x.id : uid(), t: n0(x.t), type: x.type, ml: n0(x.ml), abv: n0(x.abv) })),
-        water: arr(v.water).filter(x => n0(x.ml) > 0 && n0(x.ml) <= 5000).map(x => ({ t: n0(x.t), ml: n0(x.ml) })) };
+        water: arr(v.water).filter(x => n0(x.ml) > 0 && n0(x.ml) <= 5000).map(x => ({ t: n0(x.t), ml: n0(x.ml) })), sweat: ["적음","보통","많이"].includes(v.sweat) ? v.sweat : undefined };
       const a = day(k);
       const union = (x, y) => [...x, ...y.filter(i => !x.some(j => j.id === i.id))];
-      days = { ...days, [k]: { workouts: union(a.workouts, b.workouts), meals: union(a.meals, b.meals), sleep: a.sleep || b.sleep, body: a.body || b.body, supps: { ...b.supps, ...a.supps }, water: a.water.length ? a.water : b.water, drinks: union(a.drinks, b.drinks) } };
+      days = { ...days, [k]: { workouts: union(a.workouts, b.workouts), meals: union(a.meals, b.meals), sleep: a.sleep || b.sleep, body: a.body || b.body, supps: { ...b.supps, ...a.supps }, water: a.water.length ? a.water : b.water, drinks: union(a.drinks, b.drinks), sweat: a.sweat || b.sweat } };
       changed.push(k);
     }
     if (inc.lib) {
@@ -3066,6 +3075,9 @@ document.addEventListener("click", e => {
   if (ds.drink) { const [ty, ml, abv] = ds.drink.split("|"); return addDrink(ty, ml, abv); }
   if (ds.editsupp) return openSupp(ds.editsupp);
   if (ds.day) { cur = ds.day; renderHome(); const el = document.querySelector(".detail"); if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" }); return; }
+  if (ds.sweat) { const w = t.closest("[data-waterday]"), k = w ? w.dataset.waterday : cur, d = day(k);
+    d.sweat = ds.sweat === "보통" ? undefined : ds.sweat; days = { ...days, [k]: d }; persist(k); render();
+    return toast(`땀 ${ds.sweat} · 물 목표 ${(waterGoal(k) / 1000).toFixed(1)}L`); }
   if (ds.dgo) { const [v, k] = ds.dgo.split(":"); cur = k;
     if (v === "supp" || v === "drink") { fsub = v; return setView("food"); }
     if (v === "food") fsub = "meal"; if (v === "work") wsub = "log"; return setView(v); }
