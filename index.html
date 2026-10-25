@@ -384,6 +384,10 @@ button.tgt:disabled { cursor: default; color: inherit; opacity: 1; }
 .preset img { width: 22px; height: 22px; border-radius: 6px; object-fit: cover; margin: -4px 6px -4px -4px; vertical-align: middle; }
 .textbtn.inl { display: inline; min-height: 0; padding: 0 0 0 6px; font-size: 12px; }
 .tapsip { font-size: 11px; }
+.wakes { display: flex; flex-direction: column; gap: 6px; }
+.wakerow { display: grid; grid-template-columns: 1fr 80px auto 36px; gap: 6px; align-items: center; }
+.wakerow span { font-size: 13px; color: var(--muted); }
+.drinkbtn.edit { background: none; border: 1px dashed var(--line); }
 .sweat { display: flex; align-items: center; gap: 4px; margin-top: 6px; font-size: 12px; color: var(--muted); }
 .sweat span { margin-right: 2px; }
 .sweat button { border: 0; background: var(--fill); color: var(--muted); font-size: 12px; font-weight: 600; border-radius: 8px; padding: 4px 9px; min-height: 28px; }
@@ -867,7 +871,10 @@ function wItems(w) {
 const setVol = (s) => n0(s.kg) * n0(s.reps);
 const itemsVol = (items) => items.reduce((a, it) => a + it.sets.reduce((b, s) => b + setVol(s), 0), 0);
 const itemsParts = (items) => [...new Set(items.map(it => it.part || partOf(it.name)))];
-function sleepHours(s) { return s && s.bed && s.wake ? spanMin(s.bed, s.wake) / 60 : 0; }
+// time in bed minus the minutes awake in the night
+const awakeMin = (s) => s && Array.isArray(s.wakes) ? s.wakes.reduce((a, x) => a + n0(x.min), 0) : 0;
+function sleepHours(s) { if (!s || !s.bed || !s.wake) return 0; const span = spanMin(s.bed, s.wake); return Math.max(0, span - Math.min(awakeMin(s), span)) / 60; }
+const wakeTxt = (s) => s && s.wakes && s.wakes.length ? `중간에 ${s.wakes.length}번 · ${awakeMin(s)}분 깸` : "";
 function totals(k) {
   const d = day(k), items = d.workouts.filter(w => w.cat === "웨이트").flatMap(wItems);
   const sum = (f) => d.meals.reduce((a,m) => a + n0(m[f]), 0);
@@ -1126,7 +1133,7 @@ function dayDetail(k) {
       ${sd.length ? row("food", "영양제", `data-dgo="supp:${k}"`, sd.map(x => `<span class="sdot ${x.done ? "on" : ""}">${x.done ? "✓" : "○"} ${esc(x.s.name)}${x.s.times.length > 1 ? `<small>${x.t}</small>` : ""}</span>`).join("")) : ""}
       ${drinks ? row("alc", "술", `data-dgo="drink:${k}"`, `<b>${stdDrinks(drinks.g).toFixed(1)}잔</b><span class="dsub">${d.drinks.map(x => esc(x.type)).join(" · ")}</span>`) : ""}
       ${row("water", "물", `data-dgo="food:${k}"`, wml ? `<b>${(wml / 1000).toFixed(1)}L</b><span class="wbar"><i style="width:${Math.min(100, wml / wg * 100).toFixed(0)}%"></i></span><span class="dsub">/ ${(wg / 1000).toFixed(1)}L</span>` : none("기록 없음"))}
-      ${row("rest", "수면", `data-editsleep="${k}"`, d.sleep ? `<b>${fmtH(t.sleep)}</b><span class="dsub">${esc(d.sleep.bed)} → ${esc(d.sleep.wake)}</span>` : none("+ 기록"))}
+      ${row("rest", "수면", `data-editsleep="${k}"`, d.sleep ? `<b>${fmtH(t.sleep)}</b><span class="dsub">${esc(d.sleep.bed)} → ${esc(d.sleep.wake)}${awakeMin(d.sleep) ? ` · 깸 ${awakeMin(d.sleep)}분` : ""}</span>` : none("+ 기록"))}
       ${b && n0(b.weight) ? row("body", "몸", `data-editbody="${k}"`, `<b>${Math.round(n0(b.weight) * 10) / 10}kg</b>${n0(b.fat) ? `<span class="dsub">체지방 ${fatPct(b).toFixed(1)}%</span>` : ""}${n0(b.muscle) ? `<span class="dsub">골격근 ${n0(b.muscle)}kg</span>` : ""}`) : ""}
     </div>
   </section>`;
@@ -1424,6 +1431,11 @@ function sleepAnalysis() {
   const ageTxt = age ? `${age}세 권장 ${age < 18 ? "8~10" : age >= 65 ? "7~8" : "7~9"}시간` : "성인 권장 7~9시간";
   out.push(avg >= min ? verdict(avg >= need ? "good" : "info", `평균 ${fmtH(avg)}, ${avg >= need ? "충분해요" : "괜찮지만 조금 더 자면 좋아요"}`, `최근 ${rec.length}일 기준 · ${ageTxt} · 내 목표 ${need}시간${need > 7.5 ? " (운동 많은 주 +30분)" : ""}`)
     : verdict(avg < 6 ? "bad" : "warn", `평균 ${fmtH(avg)}, 부족해요`, `${ageTxt}이에요. 목표 ${need}시간 대비 최근 7일 부족한 잠이 약 ${fmtH(debt)} 쌓였어요`));
+  const waso = rec.map(x => awakeMin(x.s)), wAvg = waso.reduce((a, b) => a + b, 0) / rec.length;
+  const eff = rec.map(x => sleepHours(x.s) * 60 / spanMin(x.s.bed, x.s.wake)), effAvg = eff.reduce((a, b) => a + b, 0) / eff.length;
+  if (waso.some(Boolean)) out.push(wAvg >= 30 || effAvg < 0.85
+    ? verdict("warn", `자다 깬 시간이 평균 ${Math.round(wAvg)}분이에요`, `누워 있던 시간 중 실제로 잔 비율(수면 효율) ${Math.round(effAvg * 100)}%. 30분 이상 깨거나 효율이 85% 아래인 밤이 이어지면 카페인·술·늦은 운동·방 온도를 점검하고, 3주 넘게 계속되면 진료를 받아 보세요`)
+    : verdict("good", `수면 효율 ${Math.round(effAvg * 100)}%`, `자다 깬 시간 평균 ${Math.round(wAvg)}분 · 85% 이상이면 좋은 편이에요`));
   if (short) out.push(verdict("warn", `6시간 미만으로 잔 날이 ${short}일 있어요`, "짧은 잠이 이어지면 근력 회복과 식욕 조절이 나빠져요. 다음 날 고강도 운동은 줄이는 게 좋아요"));
   out.push(sd > 60 ? verdict("warn", "잠드는 시간이 들쑥날쑥해요", `취침 시각이 평균 ±${Math.round(sd)}분 차이 나요. 매일 비슷한 시간(±30분)에 자면 잠의 질이 좋아져요`)
     : verdict("good", "잠드는 시간이 규칙적이에요", `평균 취침 ${hhmm(new Date(2000, 0, 1, 0, Math.round(bm < 0 ? bm + 1440 : bm)).getTime())} · 차이 ±${Math.round(sd)}분`));
@@ -1639,8 +1651,10 @@ function sleepDial(k, size = 150) {
   let arc = "", icons = "", center = `<text x="70" y="74" text-anchor="middle" font-size="12" fill="var(--muted)">기록 없음</text>`;
   if (s) {
     const b = m(s.bed), w = m(s.wake), len = ((w - b) + 1440) % 1440 || 1440, big = len > 720 ? 1 : 0;
-    const [x1, y1] = toXY(b, R), [x2, y2] = toXY(w, R), h = len / 60, pct = Math.min(1, h / sleepNeed());
-    arc = `<path class="sleeparc" pathLength="1" d="M${x1.toFixed(1)} ${y1.toFixed(1)} A${R} ${R} 0 ${big} 1 ${x2.toFixed(1)} ${y2.toFixed(1)}" fill="none" stroke="var(--rest)" stroke-width="13" stroke-linecap="round"></path>`;
+    const [x1, y1] = toXY(b, R), [x2, y2] = toXY(w, R), h = sleepHours(s), pct = Math.min(1, h / sleepNeed());
+    arc = `<path class="sleeparc" pathLength="1" d="M${x1.toFixed(1)} ${y1.toFixed(1)} A${R} ${R} 0 ${big} 1 ${x2.toFixed(1)} ${y2.toFixed(1)}" fill="none" stroke="var(--rest)" stroke-width="13" stroke-linecap="round"></path>`
+      + (s.wakes || []).map(x => { const a = m(x.at), e = a + Math.max(10, n0(x.min)); const [p1, q1] = toXY(a, R), [p2, q2] = toXY(e, R);
+        return `<path class="wakegap" d="M${p1.toFixed(1)} ${q1.toFixed(1)} A${R} ${R} 0 0 1 ${p2.toFixed(1)} ${q2.toFixed(1)}" fill="none" stroke="var(--rec-fg)" stroke-width="13"></path>`; }).join("");
     icons = `<g class="dialicon" transform="translate(${x1.toFixed(1)} ${y1.toFixed(1)})"><circle r="9" fill="var(--surface)"></circle><path d="M2.5 -4.5 A5 5 0 1 0 4.5 2.5 A4 4 0 0 1 2.5 -4.5 Z" fill="var(--rest)"></path></g>
       <g class="dialicon" transform="translate(${x2.toFixed(1)} ${y2.toFixed(1)})"><circle r="9" fill="var(--surface)"></circle><circle r="3.2" fill="#F5A623"></circle>${[0,45,90,135,180,225,270,315].map(a => `<line x1="0" y1="-5" x2="0" y2="-6.6" stroke="#F5A623" stroke-width="1.4" transform="rotate(${a})"></line>`).join("")}</g>`;
     center = `<text x="70" y="70" text-anchor="middle" font-size="19" font-weight="800" fill="var(--ink)">${Math.floor(h)}h ${String(Math.round((h % 1) * 60)).padStart(2, "0")}m</text>
@@ -1782,8 +1796,11 @@ const DRINKS = {
   위스키: { abv: 40, units: [["1샷", 30], ["더블", 60]], carb: 0 },
   칵테일: { abv: 12, units: [["1잔", 150]], carb: 10 },
 };
+// the user's drink list: defaults until edited; each { name, abv, carb (g/100ml), units [[label, ml], ...] }
+const drinkTypes = () => Array.isArray(lib.drinkTypes) ? lib.drinkTypes : Object.entries(DRINKS).map(([name, d]) => ({ name, abv: d.abv, carb: d.carb, units: d.units }));
+const drinkType = (name) => drinkTypes().find(x => x.name === name) || (DRINKS[name] ? { name, ...DRINKS[name] } : null);
 const alcG = (x) => n0(x.ml) * n0(x.abv) / 100 * 0.789;
-const drinkCarb = (x) => n0(x.ml) / 100 * ((DRINKS[x.type] || {}).carb || 0);
+const drinkCarb = (x) => n0(x.ml) / 100 * ((drinkType(x.type) || {}).carb || 0);
 const drinkKcal = (x) => alcG(x) * 7 + drinkCarb(x) * 4;
 function dayAlcohol(k) { const ds = day(k).drinks; return { g: ds.reduce((a, x) => a + alcG(x), 0), kcal: ds.reduce((a, x) => a + drinkKcal(x), 0), carb: ds.reduce((a, x) => a + drinkCarb(x), 0), n: ds.length }; }
 const stdDrinks = (g) => g / 10;
@@ -1823,7 +1840,8 @@ function renderDrinks() {
         <ul class="items">${list.map(x => `<li><div class="it-main" data-editdrink="${cur}:${esc(x.id)}" role="button" tabindex="0"><b>${esc(x.type)} ${n0(x.ml)}ml <span class="editmark">수정</span></b><span>${n0(x.abv)}% · 알코올 ${Math.round(alcG(x))}g${x.t > 1 ? " · " + hhmm(x.t) : ""}</span></div>
           <span class="it-val">${stdDrinks(alcG(x)).toFixed(1)}잔</span><button class="del" data-del="${cur}:drinks:${esc(x.id)}" aria-label="삭제">×</button></li>`).join("")}</ul>`
         : `<p class="empty">오늘은 마시지 않았어요.</p>`}
-      <div class="drinkgrid">${Object.entries(DRINKS).map(([t, d]) => `<button class="drinkbtn" data-drink="${t}|${d.units[0][1]}|${d.abv}"><b>${t}</b><span>${d.units[0][0]} · ${d.abv}%</span></button>`).join("")}</div>
+      <div class="drinkgrid">${drinkTypes().map(d => `<button class="drinkbtn" data-drink="${esc(d.name)}|${d.units[0][1]}|${d.abv}"><b>${esc(d.name)}</b><span>${esc(d.units[0][0])} · ${d.abv}%</span></button>`).join("")}
+        <button class="drinkbtn edit" data-act="drinktypes"><b>종류 편집</b><span>추가 · 수정</span></button></div>
     </section>
     <section class="panel food"><div class="panel-h"><h2><i class="dot alc"></i>최근 7일 음주 분석</h2></div>${alcoholAnalysis()}</section>
     <section class="panel food"><div class="chart"><div class="cap"><h2><i class="dot alc"></i>알코올</h2><span>최근 7일 · 합계 <b class="num">${stdDrinks(g7.reduce((x, y) => x + y, 0)).toFixed(1)}</b>표준잔</span></div>
@@ -1856,22 +1874,25 @@ function alcoholAnalysis() {
   return out.join("");
 }
 function openDrink(k = cur, id = null) {
-  const ex = id ? day(k).drinks.find(x => x.id === id) : null, t0 = ex && DRINKS[ex.type] ? ex.type : "소주";
+  const list = drinkTypes(), ex = id ? day(k).drinks.find(x => x.id === id) : null;
+  const t0 = ex ? ex.type : (list[0] || { name: "소주" }).name, names = list.map(x => x.name).concat(ex && !drinkType(ex.type) ? [ex.type] : []);
+  const unitsOf = (t) => (drinkType(t) || { units: [["1잔", ex ? n0(ex.ml) : 150]] }).units, abvOf = (t) => (drinkType(t) || { abv: ex ? n0(ex.abv) : 5 }).abv;
   sheetState = { type: t0 };
-  const unitBtns = (t) => DRINKS[t].units.map(([l, ml]) => `<button type="button" data-ml="${ml}">${l} ${ml}ml</button>`).join("");
+  const unitBtns = (t) => unitsOf(t).map(([l, ml]) => `<button type="button" data-ml="${ml}">${esc(l)} ${ml}ml</button>`).join("");
   showSheet(`<form id="f" class="form" novalidate><h3>${ex ? "술 기록 수정" : "술 기록"} · ${md(k)}</h3>
-    <div class="field"><span class="lbl">종류</span>${seg("type", Object.keys(DRINKS), t0)}</div>
+    <div class="field"><span class="lbl">종류 <button type="button" class="textbtn inl" id="dk-types">편집</button></span>${seg("type", names, t0)}</div>
     <div class="field"><span class="lbl">양</span><div class="seg" id="dk-units">${unitBtns(t0)}</div></div>
-    <div class="row2"><div class="field"><label for="dk-ml">양 (ml)</label><input id="dk-ml" type="number" inputmode="numeric" min="1" max="5000" value="${ex ? n0(ex.ml) : DRINKS[t0].units[0][1]}"></div>
-      <div class="field"><label for="dk-abv">도수 (%)</label><input id="dk-abv" type="number" inputmode="decimal" min="0.5" max="70" step="0.1" value="${ex ? n0(ex.abv) : DRINKS[t0].abv}"></div></div>
+    <div class="row2"><div class="field"><label for="dk-ml">양 (ml)</label><input id="dk-ml" type="number" inputmode="numeric" min="1" max="5000" value="${ex ? n0(ex.ml) : unitsOf(t0)[0][1]}"></div>
+      <div class="field"><label for="dk-abv">도수 (%)</label><input id="dk-abv" type="number" inputmode="decimal" min="0.5" max="70" step="0.1" value="${ex ? n0(ex.abv) : abvOf(t0)}"></div></div>
     ${ex && ex.t > 1 ? `<div class="field"><label for="dk-at">마신 시각</label><input id="dk-at" type="time" value="${hhmm(ex.t)}"></div>` : ""}
     <p class="hint" id="dk-calc"></p>
     ${ex ? `<button type="button" class="textbtn danger" id="dk-del">이 기록 지우기</button>` : ""}
     ${formTail(ex ? "수정" : "기록")}</form>`);
   if ($("dk-del")) $("dk-del").onclick = () => { const d = day(k); d.drinks = d.drinks.filter(x => x.id !== ex.id); days = { ...days, [k]: d }; closeSheet(true); render(); persist(k); toast("지웠어요"); };
   const calc = () => { const g = alcG({ ml: $("dk-ml").value, abv: $("dk-abv").value }); $("dk-calc").textContent = `알코올 ${Math.round(g)}g · 표준잔 ${stdDrinks(g).toFixed(1)}잔`; };
-  $("f").querySelector("[data-seg=type]").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (!b) return; const d = DRINKS[b.dataset.v];
-    $("dk-units").innerHTML = unitBtns(b.dataset.v); $("dk-ml").value = d.units[0][1]; $("dk-abv").value = d.abv; calc(); });
+  $("dk-types").onclick = () => { closeSheet(); openDrinkTypes(); };
+  $("f").querySelector("[data-seg=type]").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (!b) return;
+    $("dk-units").innerHTML = unitBtns(b.dataset.v); $("dk-ml").value = unitsOf(b.dataset.v)[0][1]; $("dk-abv").value = abvOf(b.dataset.v); calc(); });
   $("dk-units").onclick = e => { const b = e.target.closest("[data-ml]"); if (b) { $("dk-ml").value = b.dataset.ml; calc(); } };
   $("dk-ml").oninput = calc; $("dk-abv").oninput = calc; calc();
   bindForm(() => { const ml = n0($("dk-ml").value), abv = n0($("dk-abv").value);
@@ -2255,7 +2276,8 @@ function renderSleep() {
   const s = day(cur).sleep, ts = last7().map(totals);
   $("view-sleep").innerHTML = `
     <section class="panel rest"><div class="panel-h"><h2><i class="dot"></i>수면</h2><button class="add" data-act="sleep">${s ? "수정" : "+ 기록"}</button></div>
-      ${s ? `<div class="sleeprow">${sleepDial(cur, 150)}<div class="sleepbig col"><div><span class="k">취침</span><b>${esc(s.bed)}</b></div><div><span class="k">기상</span><b>${esc(s.wake)}</b></div></div></div>
+      ${s ? `<div class="sleeprow">${sleepDial(cur, 150)}<div class="sleepbig col"><div><span class="k">취침</span><b>${esc(s.bed)}</b></div><div><span class="k">기상</span><b>${esc(s.wake)}</b></div>
+          ${s.wakes && s.wakes.length ? `<div><span class="k">자다 깸</span><b>${awakeMin(s)}<small>분</small></b><span class="hint">${s.wakes.map(x => `${esc(x.at)} ${n0(x.min)}분`).join(" · ")}</span></div>` : ""}</div></div>
         <button class="textbtn danger" data-del="${cur}:sleep">기록 삭제</button>` : `<p class="empty">취침과 기상 시각만 적으면 돼요. 일어난 날짜에 저장돼요.</p>`}</section>
     <section class="panel rest"><div class="panel-h"><h2><i class="dot"></i>최근 7일 수면 분석</h2></div>${missingNote(["나이"])}${sleepAnalysis()}</section>
     ${chart("rest", "수면 시간", "h", ts.map(x => x.sleep), sleepNeed(), v => v.toFixed(1))}`;
@@ -2860,20 +2882,77 @@ JSON 하나로만 답해. 형식: {"menu":"음식 이름","kcal":정수,"carb":�
   } finally { btn.classList.remove("busy"); }
 }
 
+/* drink types: add, edit (name, ABV, one glass, sugar) or delete; past records keep their own amount and ABV */
+function openDrinkTypes() {
+  sheetState = { editing: null };
+  const draw = () => {
+    $("dt-list").innerHTML = drinkTypes().map((x, i) => `<li><div class="it-main" data-dti="${i}" role="button" tabindex="0"><b>${esc(x.name)} <span class="editmark">수정</span></b><span>${x.abv}% · ${esc(x.units[0][0])} ${x.units[0][1]}ml${x.carb ? ` · 당류 ${x.carb}g/100ml` : ""}</span></div>
+      <span></span><button type="button" class="del" data-dtdel="${i}" aria-label="${esc(x.name)} 삭제">×</button></li>`).join("") || `<li><p class="empty">종류가 없어요. 아래에서 추가하세요.</p></li>`;
+    const e = sheetState.editing != null ? drinkTypes()[sheetState.editing] : null;
+    $("dt-h").textContent = e ? `'${e.name}' 수정` : "새 종류 추가";
+    $("dt-name").value = e ? e.name : ""; $("dt-abv").value = e ? e.abv : ""; $("dt-ml").value = e ? e.units[0][1] : ""; $("dt-carb").value = e && e.carb ? e.carb : "";
+    $("dt-save").textContent = e ? "수정" : "추가"; $("dt-new").hidden = !e;
+  };
+  showSheet(`<form id="f" class="form" novalidate><h3>술 종류</h3>
+    <ul class="items" id="dt-list"></ul>
+    <div class="field"><span class="lbl" id="dt-h"></span><input id="dt-name" placeholder="이름 (예: 사케, 청하)" maxlength="12" autocomplete="off"></div>
+    <div class="row3">
+      <div class="field"><label for="dt-abv">도수 %</label><input id="dt-abv" type="number" inputmode="decimal" min="0.5" max="70" step="0.1"></div>
+      <div class="field"><label for="dt-ml">1잔 ml</label><input id="dt-ml" type="number" inputmode="numeric" min="1" max="2000"></div>
+      <div class="field"><label for="dt-carb">당류 g/100ml</label><input id="dt-carb" type="number" inputmode="decimal" min="0" max="50" step="0.1" placeholder="선택"></div>
+    </div>
+    <p class="err" id="f-err" hidden></p>
+    <div class="actions"><button type="button" class="cancel" id="f-cancel">닫기</button><button type="submit" class="save" id="dt-save">추가</button></div>
+    <button type="button" class="textbtn" id="dt-new" hidden>수정 그만두고 새로 추가</button>
+    <button type="button" class="textbtn" id="dt-reset">기본 종류로 되돌리기</button></form>`);
+  draw();
+  const setList = (l) => { lib = { ...lib, drinkTypes: l }; saveLib(); render(); };
+  $("dt-list").onclick = e => {
+    const del = e.target.closest("[data-dtdel]");
+    if (del) { const l = drinkTypes().filter((_, i) => i !== Number(del.dataset.dtdel)); setList(l); sheetState.editing = null; draw(); toast("지웠어요 · 지난 기록은 그대로예요"); return; }
+    const it = e.target.closest("[data-dti]"); if (it) { sheetState.editing = Number(it.dataset.dti); draw(); $("dt-name").focus(); }
+  };
+  $("dt-new").onclick = () => { sheetState.editing = null; draw(); };
+  $("dt-reset").onclick = () => { lib = { ...lib }; delete lib.drinkTypes; saveLib(); render(); sheetState.editing = null; draw(); toast("기본 종류로 되돌렸어요"); };
+  bindForm(() => {
+    const name = $("dt-name").value.trim(), abv = Math.round(n0($("dt-abv").value) * 10) / 10, ml = Math.round(n0($("dt-ml").value)), carb = Math.round(n0($("dt-carb").value) * 10) / 10;
+    if (!name) return failMsg("이름을 입력하세요."); if (name.includes("|")) return failMsg("이름에 | 는 쓸 수 없어요.");
+    if (!(abv >= 0.5 && abv <= 70)) return failMsg("도수를 0.5~70% 사이로 입력하세요.");
+    if (!(ml >= 1 && ml <= 2000)) return failMsg("1잔 양을 ml로 입력하세요.");
+    const l = [...drinkTypes()], i = sheetState.editing;
+    if (l.some((x, j) => x.name === name && j !== i)) return failMsg("같은 이름이 이미 있어요.");
+    if (i != null) { const old = l[i]; l[i] = { name, abv, carb, units: [[old.units[0][0], ml], ...old.units.slice(1)] }; }
+    else l.push({ name, abv, carb, units: [["1잔", ml]] });
+    setList(l); sheetState.editing = null; draw(); $("f-err").hidden = true; toast(i != null ? "수정했어요" : `${name} 추가했어요`);
+  });
+}
+
 function openSleep(k = cur) {
   const s = day(k).sleep || { bed: "23:30", wake: "07:00" };
   sheetState = {};
   showSheet(`<form id="f" class="form" novalidate><h3>수면 기록 · ${md(k)}</h3>
     <div class="row2"><div class="field"><label for="f-bed">취침</label><input id="f-bed" type="time" value="${esc(s.bed)}"></div>
       <div class="field"><label for="f-wake">기상</label><input id="f-wake" type="time" value="${esc(s.wake)}"></div></div>
+    <div class="field"><span class="lbl">자다 깬 시간</span><div id="f-wakes" class="wakes"></div>
+      <button type="button" class="linkbtn" id="f-addwake">+ 깬 시간 추가</button></div>
     <p class="hint" id="f-dur"></p>${formTail()}</form>`);
-  const upd = () => { $("f-dur").textContent = "총 " + fmtH(sleepHours({ bed: $("f-bed").value, wake: $("f-wake").value })) + " · 일어난 날짜에 저장돼요"; };
-  $("f-bed").oninput = upd; $("f-wake").oninput = upd; upd();
+  const wakeRow = (x) => `<div class="wakerow"><input type="time" class="wk-at" aria-label="깬 시각" value="${esc(x.at || "")}"><input type="number" class="wk-min" inputmode="numeric" min="1" max="300" aria-label="깨어 있던 분" placeholder="분" value="${x.min ? n0(x.min) : ""}"><span>분</span><button type="button" class="del" aria-label="삭제">×</button></div>`;
+  $("f-wakes").innerHTML = (s.wakes || []).map(wakeRow).join("");
+  const readWakes = () => [...$("f-wakes").querySelectorAll(".wakerow")].map(r => ({ at: r.querySelector(".wk-at").value, min: Math.round(n0(r.querySelector(".wk-min").value)) }));
+  const upd = () => { const sl = { bed: $("f-bed").value, wake: $("f-wake").value, wakes: readWakes().filter(x => x.min > 0) };
+    $("f-dur").textContent = `잔 시간 ${fmtH(sleepHours(sl))}` + (awakeMin(sl) ? ` (누워 있던 ${fmtH(spanMin(sl.bed, sl.wake) / 60)} − 깬 ${awakeMin(sl)}분)` : "") + " · 일어난 날짜에 저장돼요"; };
+  $("f-addwake").onclick = () => { $("f-wakes").insertAdjacentHTML("beforeend", wakeRow({ at: "03:00", min: 15 })); upd(); };
+  $("f-wakes").onclick = e => { const b = e.target.closest(".del"); if (b) { b.closest(".wakerow").remove(); upd(); } };
+  $("f").addEventListener("input", upd); upd();
   bindForm(() => {
     const bed = $("f-bed").value, wake = $("f-wake").value;
     if (!bed || !wake) return failMsg("취침과 기상 시각을 모두 입력하세요.");
     if (bed === wake) return failMsg("취침과 기상 시각이 같아요.");
-    const d = day(k); d.sleep = { bed, wake };
+    const wakes = readWakes();
+    if (wakes.some(x => !x.at || !(x.min >= 1 && x.min <= 300))) return failMsg("깬 시각과 깨어 있던 시간(1~300분)을 입력하세요.");
+    if (wakes.some(x => spanMin(bed, x.at) >= spanMin(bed, wake))) return failMsg("깬 시각은 취침과 기상 사이여야 해요.");
+    if (wakes.reduce((a, x) => a + x.min, 0) >= spanMin(bed, wake)) return failMsg("깬 시간이 누워 있던 시간보다 길어요.");
+    const d = day(k); d.sleep = { bed, wake, ...(wakes.length ? { wakes: wakes.sort((a, b) => spanMin(bed, a.at) - spanMin(bed, b.at)) } : {}) };
     days = { ...days, [k]: d }; closeSheet(true); render(); persist(k); toast("저장했어요");
   });
 }
@@ -2966,10 +3045,10 @@ function openBackup() {
     for (const [k, v] of Object.entries(inc.days || {})) {
       if (!isDayKey(k) || !v || typeof v !== "object") continue;
       const b = { workouts: arr(v.workouts).map(workout), meals: arr(v.meals).map(meal),
-        sleep: v.sleep && hm(v.sleep.bed) && hm(v.sleep.wake) ? { bed: v.sleep.bed, wake: v.sleep.wake } : null,
+        sleep: v.sleep && hm(v.sleep.bed) && hm(v.sleep.wake) ? { bed: v.sleep.bed, wake: v.sleep.wake, ...(Array.isArray(v.sleep.wakes) && v.sleep.wakes.length ? { wakes: v.sleep.wakes.filter(x => x && hm(x.at) && n0(x.min) >= 1 && n0(x.min) <= 300).slice(0, 20).map(x => ({ at: x.at, min: Math.round(n0(x.min)) })) } : {}) } : null,
         body: v.body && n0(v.body.weight) ? { weight: n0(v.body.weight), muscle: n0(v.body.muscle), fat: n0(v.body.fat) } : null,
         supps: v.supps && typeof v.supps === "object" ? Object.fromEntries(Object.entries(v.supps).filter(([kk, vv]) => /^[A-Za-z0-9_-]{1,64}@[가-힣 ]{2,5}$/.test(kk) && n0(vv)).map(([kk, vv]) => [kk, n0(vv)])) : {},
-        drinks: arr(v.drinks).filter(x => DRINKS[x.type] && n0(x.ml) > 0 && n0(x.ml) <= 5000 && n0(x.abv) <= 70).map(x => ({ id: okId(x.id) ? x.id : uid(), t: n0(x.t), type: x.type, ml: n0(x.ml), abv: n0(x.abv) })),
+        drinks: arr(v.drinks).filter(x => str(x.type) && x.type.length <= 20 && n0(x.ml) > 0 && n0(x.ml) <= 5000 && n0(x.abv) <= 70).map(x => ({ id: okId(x.id) ? x.id : uid(), t: n0(x.t), type: x.type, ml: n0(x.ml), abv: n0(x.abv) })),
         water: arr(v.water).filter(x => n0(x.ml) > 0 && n0(x.ml) <= 5000).map(x => ({ t: n0(x.t), ml: n0(x.ml) })), sweat: ["적음","보통","많이"].includes(v.sweat) ? v.sweat : undefined };
       const a = day(k);
       const union = (x, y) => [...x, ...y.filter(i => !x.some(j => j.id === i.id))];
@@ -2984,7 +3063,10 @@ function openBackup() {
       const sp = [...supps()]; arr(inc.lib.supps).forEach(x => { if (okId(x.id) && str(x.name) && !sp.some(y => y.id === x.id)) sp.push({ id: x.id, since: isDayKey(x.since || "") ? x.since : "", name: x.name, kind: SUPP_KINDS.includes(x.kind) ? x.kind : "영양제", dose: str(x.dose), memo: str(x.memo), times: (Array.isArray(x.times) ? x.times : []).filter(t => SUPP_TIMES.includes(t)), active: x.active !== false }); });
       const mp = [...presets()]; arr(inc.lib.mealPresets).forEach(x => { if (okId(x.id) && str(x.menu) && !mp.some(y => y.id === x.id)) mp.push({ id: x.id, menu: x.menu, kcal: n0(x.kcal), carb: n0(x.carb), protein: n0(x.protein), fat: n0(x.fat), photo: typeof x.photo === "string" && /^[A-Za-z0-9_]{1,64}$/.test(x.photo) ? x.photo : "" }); });
       const ctypes = [...cardioTypes()]; (Array.isArray(inc.lib.cardioTypes) ? inc.lib.cardioTypes : []).forEach(t => { if (str(t) && t.length <= 20 && !ctypes.includes(t)) ctypes.push(t); });
-      lib = { ...lib, exercises: ex, routines: rt, mealPresets: mp, cardioTypes: ctypes, supps: sp.filter(x => x.times.length), ...(prof ? { profile: prof } : {}) };
+      const dtIn = Array.isArray(inc.lib.drinkTypes) ? inc.lib.drinkTypes.filter(x => x && str(x.name) && x.name.length <= 20 && !x.name.includes("|") && n0(x.abv) >= 0.5 && n0(x.abv) <= 70)
+        .map(x => ({ name: x.name, abv: n0(x.abv), carb: Math.min(50, n0(x.carb)), units: (Array.isArray(x.units) ? x.units : []).filter(u => Array.isArray(u) && str(u[0]) && n0(u[1]) >= 1 && n0(u[1]) <= 5000).slice(0, 5).map(u => [u[0].slice(0, 10), n0(u[1])]) })).filter(x => x.units.length) : null;
+      const dtypes = dtIn ? [...drinkTypes(), ...dtIn.filter(x => !drinkTypes().some(y => y.name === x.name))].slice(0, 40) : lib.drinkTypes;
+      lib = { ...lib, exercises: ex, routines: rt, mealPresets: mp, cardioTypes: ctypes, ...(dtypes ? { drinkTypes: dtypes } : {}), supps: sp.filter(x => x.times.length), ...(prof ? { profile: prof } : {}) };
     }
     migrateParts();
     saveLocal();
@@ -3096,6 +3178,7 @@ document.addEventListener("click", e => {
     if (a === "startw") openStartSheet(); else if (a === "resume") startSession();
     else if (a === "cardio") openCardio(); else if (a === "meal") openMeal(); else if (a === "sleep") openSleep(t.closest(".glance") ? todayKey() : cur);
     else if (a === "water") { const w = t.closest("[data-waterday]"); addWater(50, w ? w.dataset.waterday : cur); }
+    else if (a === "drinktypes") openDrinkTypes();
     else if (a === "watercustom") { if (t.closest(".glance")) cur = todayKey(); openWaterCustom(); }
     else if (a === "body") { cur = todayKey(); openBody(); } else if (a === "bodyview") openBodyView(); else if (a === "profile") openProfile(); else if (a === "addsupp") openSupp(null); else if (a === "presets") openPresets(); else if (a === "drinkcustom") openDrink(); else if (a === "backup") openBackup(); else if (a === "newrt") openRoutineEditor(null); else if (a === "newex") openExercise(null);
     else if (a === "today") { cur = todayKey(); render(); }
