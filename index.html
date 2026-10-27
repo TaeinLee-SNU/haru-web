@@ -1140,11 +1140,11 @@ function dayDetail(k) {
 }
 
 /* ---------- 운동 / 식단 / 수면 tabs ---------- */
-function chart(cls, title, unit, vals, goal, fmt) {
+function chart(cls, title, unit, vals, goal, fmt, color) {
   const keys = last7(), nz = vals.filter(v => v > 0), avg = nz.length ? nz.reduce((a,b)=>a+b,0) / nz.length : 0;
   return `<section class="panel ${cls}"><div class="chart">
     <div class="cap"><h2><i class="dot"></i>${title}</h2><span>최근 7일 · 기록한 날 평균 <b class="num">${nz.length ? fmt(avg) : "–"}</b>${unit}</span></div>
-    ${barChart({ labels: keys.map(k => WD[parseKey(k).getDay()]), tips: keys.map(mdw), vals, fmt, unit, goal, color: cls === "food" ? "var(--food)" : cls === "rest" ? "var(--rest)" : "var(--move)" })}
+    ${barChart({ labels: keys.map(k => WD[parseKey(k).getDay()]), tips: keys.map(mdw), vals, fmt, unit, goal, color: color || (cls === "food" ? "var(--food)" : cls === "rest" ? "var(--rest)" : "var(--move)") })}
     ${goal ? `<p class="hint">점선: 목표 ${fmt(goal)}${unit}</p>` : ""}
   </div></section>`;
 }
@@ -2270,7 +2270,9 @@ function renderFood() {
     <section class="panel food"><div class="panel-h"><h2><i class="dot"></i>먹은 것</h2><button class="add solid" data-act="meal">+ 식단 추가</button></div>
       ${m ? `<ul class="items">${m}</ul>` : `<p class="empty">아직 식사 기록이 없어요.</p>`}</section>
     ${chart("food", "섭취 칼로리", "kcal", ts.map(x => x.food), FG, v => Math.round(v).toLocaleString())}
-    ${chart("food", "단백질", "g", ts.map(x => x.protein), plan.protein || 0, v => Math.round(v))}`;
+    ${chart("food", "탄수화물", "g", ts.map(x => x.carb), plan.carb || 0, v => Math.round(v), "var(--cardio)")}
+    ${chart("food", "단백질", "g", ts.map(x => x.protein), plan.protein || 0, v => Math.round(v), "var(--move)")}
+    ${chart("food", "지방", "g", ts.map(x => x.fat), plan.fat || 0, v => Math.round(v), "var(--rest)")}`;
 }
 function renderSleep() {
   const s = day(cur).sleep, ts = last7().map(totals);
