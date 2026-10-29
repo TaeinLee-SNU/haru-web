@@ -378,6 +378,7 @@ button.tgt:disabled { cursor: default; color: inherit; opacity: 1; }
 .mtime { display: flex; flex-direction: column; font-variant-numeric: tabular-nums; font-weight: 700; font-size: 14px; }
 .mtime small { font-size: 11px; color: var(--muted); font-weight: 600; }
 .mmac { font-size: 12px; color: var(--muted); }
+.drinkrow .mtime small { color: var(--alc); }
 .mthumb { width: 40px; height: 40px; border: 0; padding: 0; border-radius: 10px; overflow: hidden; background: var(--fill); }
 .mthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .it-val small { font-size: 11px; color: var(--muted); margin-left: 1px; }
@@ -860,7 +861,7 @@ function fmtMin(m) { return m >= 60 ? Math.floor(m/60) + "시간" + (m%60 ? " " 
 const kg = (v) => Math.round(v).toLocaleString();
 const setTxt = (s) => `${n0(s.kg) ? n0(s.kg) + "kg" : "맨몸"}×${n0(s.reps)}`;
 
-function day(k) { const d = days[k] || {}; return { workouts: d.workouts || [], meals: d.meals || [], sleep: d.sleep || null, body: d.body || null, supps: d.supps && typeof d.supps === "object" ? d.supps : {}, water: Array.isArray(d.water) ? d.water : [], drinks: Array.isArray(d.drinks) ? d.drinks : [], sweat: ["적음","보통","많이"].includes(d.sweat) ? d.sweat : undefined }; }
+function day(k) { const d = days[k] || {}; return { workouts: d.workouts || [], meals: d.meals || [], sleep: d.sleep || null, body: d.body || null, supps: d.supps && typeof d.supps === "object" ? d.supps : {}, water: Array.isArray(d.water) ? d.water : [], drinks: Array.isArray(d.drinks) ? d.drinks : [], naps: Array.isArray(d.naps) ? d.naps : [], sweat: ["적음","보통","많이"].includes(d.sweat) ? d.sweat : undefined }; }
 function activeMs(s) { return (s.pausedAt || Date.now()) - s.start - (s.pausedMs || 0); }
 function partOf(name) { const e = lib.exercises.find(x => x.name === name); return e ? e.part : "기타"; }
 function wItems(w) {
@@ -874,6 +875,7 @@ const itemsParts = (items) => [...new Set(items.map(it => it.part || partOf(it.n
 // time in bed minus the minutes awake in the night
 const awakeMin = (s) => s && Array.isArray(s.wakes) ? s.wakes.reduce((a, x) => a + n0(x.min), 0) : 0;
 function sleepHours(s) { if (!s || !s.bed || !s.wake) return 0; const span = spanMin(s.bed, s.wake); return Math.max(0, span - Math.min(awakeMin(s), span)) / 60; }
+const napHours = (k) => day(k).naps.reduce((a, x) => a + spanMin(x.start, x.end), 0) / 60;
 const wakeTxt = (s) => s && s.wakes && s.wakes.length ? `중간에 ${s.wakes.length}번 · ${awakeMin(s)}분 깸` : "";
 function totals(k) {
   const d = day(k), items = d.workouts.filter(w => w.cat === "웨이트").flatMap(wItems);
@@ -884,7 +886,7 @@ function totals(k) {
     moveC: d.workouts.filter(w => w.cat === "유산소").reduce((a,w) => a + n0(w.min), 0),
     vol: itemsVol(items), parts: itemsParts(items),
     food: Math.round(sum("kcal") + d.drinks.reduce((a, x) => a + drinkKcal(x), 0)), carb: Math.round(sum("carb") + d.drinks.reduce((a, x) => a + drinkCarb(x), 0)), protein: Math.round(sum("protein")), fat: Math.round(sum("fat")),
-    sleep: sleepHours(d.sleep),
+    sleep: sleepHours(d.sleep), nap: napHours(k),
   };
 }
 function ssLabels(items) {
@@ -1036,14 +1038,19 @@ const workoutList = (k, ro) => day(k).workouts.map(x => x.cat === "유산소" ? 
 function mealList(k, ro) {
   const order = { "아침":0, "점심":1, "저녁":2, "간식":3 };
   const tm = (m) => /^\d{2}:\d{2}$/.test(m.at || "") ? m.at : MEAL_DEFAULT_AT[m.meal] || "12:00";
-  return [...day(k).meals].sort((a,b) => tm(a).localeCompare(tm(b)) || (order[a.meal]??9) - (order[b.meal]??9)).map(x => {
+  const drinkRows = day(k).drinks.map(x => ({ at: x.t > 1 ? hhmm(x.t) : "99:99", html: `<li class="mrow drinkrow"><span class="mtime">${x.t > 1 ? hhmm(x.t) : ""}<small>술</small></span>
+      <div class="it-main"${ro ? "" : ` data-editdrink="${k}:${esc(x.id)}" role="button" tabindex="0" aria-label="${esc(x.type)} 수정"`}><b>${esc(x.type)} ${n0(x.ml)}ml</b><span class="mmac">알코올 ${Math.round(alcG(x))}g${drinkCarb(x) ? ` · 탄 ${Math.round(drinkCarb(x))}g` : ""}</span></div>
+      <span></span><span class="it-val">${Math.round(drinkKcal(x))}<small>kcal</small></span></li>` }));
+  const mealRows = [...day(k).meals].sort((a,b) => tm(a).localeCompare(tm(b)) || (order[a.meal]??9) - (order[b.meal]??9)).map(x => {
     const mac = [x.carb ? "탄 " + n0(x.carb) + "g" : "", x.protein ? "단 " + n0(x.protein) + "g" : "", x.fat ? "지 " + n0(x.fat) + "g" : ""].filter(Boolean).join(" · ");
     const ph = [x.photo, ...(x.photos || [])].filter(Boolean)[0];
-    return `<li class="mrow"><span class="mtime">${tm(x)}<small>${esc(x.meal)}</small></span>
+    return { at: tm(x), html: `<li class="mrow"><span class="mtime">${tm(x)}<small>${esc(x.meal)}</small></span>
       <div class="it-main"${ro ? "" : ` data-editmeal="${k}:${esc(x.id)}" role="button" tabindex="0" aria-label="${esc(x.menu)} 수정"`}><b>${esc(x.menu)}</b><span class="mmac">${mac || "탄단지 없음"}</span></div>
       ${ph && photoSrc(ph) ? `<button class="mthumb" data-photo="${esc(ph)}" aria-label="사진 보기"><img src="${esc(photoSrc(ph))}" alt=""></button>` : "<span></span>"}
-      <span class="it-val">${n0(x.kcal)}<small>kcal</small></span></li>`;
-  }).join("");
+      <span class="it-val">${n0(x.kcal)}<small>kcal</small></span></li>` };
+  });
+  // drinks count toward kcal and carbs, so they are listed with meals by time (no time → last)
+  return [...mealRows, ...drinkRows].sort((a, b) => a.at.localeCompare(b.at)).map(x => x.html).join("");
 }
 const activeBanner = () => active ? `<button class="banner" data-act="resume"><span>${active.pausedAt ? "일시정지" : "진행 중"}: ${esc(active.name)}</span><span class="num" data-clock>${clock(activeMs(active))}</span></button>` : "";
 
@@ -1133,7 +1140,7 @@ function dayDetail(k) {
       ${sd.length ? row("food", "영양제", `data-dgo="supp:${k}"`, sd.map(x => `<span class="sdot ${x.done ? "on" : ""}">${x.done ? "✓" : "○"} ${esc(x.s.name)}${x.s.times.length > 1 ? `<small>${x.t}</small>` : ""}</span>`).join("")) : ""}
       ${drinks ? row("alc", "술", `data-dgo="drink:${k}"`, `<b>${stdDrinks(drinks.g).toFixed(1)}잔</b><span class="dsub">${d.drinks.map(x => esc(x.type)).join(" · ")}</span>`) : ""}
       ${row("water", "물", `data-dgo="food:${k}"`, wml ? `<b>${(wml / 1000).toFixed(1)}L</b><span class="wbar"><i style="width:${Math.min(100, wml / wg * 100).toFixed(0)}%"></i></span><span class="dsub">/ ${(wg / 1000).toFixed(1)}L</span>` : none("기록 없음"))}
-      ${row("rest", "수면", `data-editsleep="${k}"`, d.sleep ? `<b>${fmtH(t.sleep)}</b><span class="dsub">${esc(d.sleep.bed)} → ${esc(d.sleep.wake)}${awakeMin(d.sleep) ? ` · 깸 ${awakeMin(d.sleep)}분` : ""}</span>` : none("+ 기록"))}
+      ${row("rest", "수면", `data-editsleep="${k}"`, d.sleep ? `<b>${fmtH(t.sleep)}</b><span class="dsub">${esc(d.sleep.bed)} → ${esc(d.sleep.wake)}${awakeMin(d.sleep) ? ` · 깸 ${awakeMin(d.sleep)}분` : ""}</span>${t.nap ? `<span class="dsub">낮잠 ${fmtMin(Math.round(t.nap * 60))}</span>` : ""}` : t.nap ? `<b>낮잠 ${fmtMin(Math.round(t.nap * 60))}</b>` : none("+ 기록"))}
       ${b && n0(b.weight) ? row("body", "몸", `data-editbody="${k}"`, `<b>${Math.round(n0(b.weight) * 10) / 10}kg</b>${n0(b.fat) ? `<span class="dsub">체지방 ${fatPct(b).toFixed(1)}%</span>` : ""}${n0(b.muscle) ? `<span class="dsub">골격근 ${n0(b.muscle)}kg</span>` : ""}`) : ""}
     </div>
   </section>`;
@@ -1185,7 +1192,7 @@ function barChart({ labels, tips, vals, fmt, unit = "", goal = 0, stack = null, 
     if (v) {
       body += `<rect class="bar" data-i="${i}" x="${x}" y="${y(v).toFixed(1)}" width="${w.toFixed(1)}" height="${(H - bot - y(v)).toFixed(1)}" rx="3" fill="${color}" style="${d}"></rect>`;
       const c = stack ? stack.vals[i] : 0;
-      if (c) body += `<rect class="bar" data-i="${i}" x="${x}" y="${y(v).toFixed(1)}" width="${w.toFixed(1)}" height="${(y(v - c) - y(v)).toFixed(1)}" rx="3" fill="var(--cardio)" style="${d}"></rect>`;
+      if (c) body += `<rect class="bar" data-i="${i}" x="${x}" y="${y(v).toFixed(1)}" width="${w.toFixed(1)}" height="${(y(v - c) - y(v)).toFixed(1)}" rx="3" fill="${stack.color || "var(--cardio)"}" style="${d}"></rect>`;
       if (n <= 12) body += `<text class="val" x="${cx(i).toFixed(1)}" y="${(y(v) - 5).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--muted)" style="${d}">${esc(fmt(v))}</text>`;
     } else body += `<rect x="${x}" y="${H - bot - 2}" width="${w.toFixed(1)}" height="2" rx="1" fill="var(--line)"></rect>`;
     body += `<text x="${cx(i).toFixed(1)}" y="${H - 7}" text-anchor="middle" font-size="9" fill="var(--muted)">${esc(labels[i])}</text>`;
@@ -1418,10 +1425,18 @@ function openProfile() {
   });
 }
 
+/* naps: 20–30 min in the early afternoon helps alertness; long or late naps cause grogginess and delay night sleep */
+function napVerdict() {
+  const keys = last7(), naps = keys.flatMap(k => day(k).naps);
+  if (!naps.length) return "";
+  const long = naps.filter(x => spanMin(x.start, x.end) > 30).length, late = naps.filter(x => x.start >= "15:00" && x.start < "22:00").length, napAvg = naps.reduce((a, x) => a + spanMin(x.start, x.end), 0) / naps.length;
+  return long || late ? verdict("warn", `낮잠 ${naps.length}번 · 평균 ${Math.round(napAvg)}분`, `${long ? `30분 넘게 잔 낮잠이 ${long}번 있어요. 길면 깊은 잠에서 깨어 더 멍해지고 밤잠이 늦어져요. ` : ""}${late ? `오후 3시 이후 낮잠이 ${late}번 있어요. 밤에 잠들기 어려워질 수 있어요. ` : ""}오후 1~3시 사이 20~30분이 좋아요`)
+    : verdict("good", `낮잠 ${naps.length}번 · 평균 ${Math.round(napAvg)}분`, "짧은 이른 오후 낮잠은 졸음과 집중력 회복에 도움이 돼요. 밤잠이 부족한 날 일부를 채워 줘요");
+}
 /* sleep analysis over the last 7 days */
 function sleepAnalysis() {
   const keys = last7(), rec = keys.map(k => ({ k, s: day(k).sleep })).filter(x => x.s);
-  if (rec.length < 3) return verdict("info", "수면을 3일 이상 기록하면 분석해 드려요", "평균 수면 시간, 부족한 양, 취침 시간 규칙성을 알려 줘요");
+  if (rec.length < 3) return verdict("info", "수면을 3일 이상 기록하면 분석해 드려요", "평균 수면 시간, 부족한 양, 취침 시간 규칙성을 알려 줘요") + napVerdict();
   const hs = rec.map(x => sleepHours(x.s)), avg = hs.reduce((a, b) => a + b) / hs.length;
   const need = sleepNeed(), min = sleepMin(), age = personal().age;
   const debt = hs.reduce((a, h) => a + Math.max(0, need - h), 0), short = hs.filter(h => h < 6).length;
@@ -1436,6 +1451,7 @@ function sleepAnalysis() {
   if (waso.some(Boolean)) out.push(wAvg >= 30 || effAvg < 0.85
     ? verdict("warn", `자다 깬 시간이 평균 ${Math.round(wAvg)}분이에요`, `누워 있던 시간 중 실제로 잔 비율(수면 효율) ${Math.round(effAvg * 100)}%. 30분 이상 깨거나 효율이 85% 아래인 밤이 이어지면 카페인·술·늦은 운동·방 온도를 점검하고, 3주 넘게 계속되면 진료를 받아 보세요`)
     : verdict("good", `수면 효율 ${Math.round(effAvg * 100)}%`, `자다 깬 시간 평균 ${Math.round(wAvg)}분 · 85% 이상이면 좋은 편이에요`));
+  out.push(napVerdict());
   if (short) out.push(verdict("warn", `6시간 미만으로 잔 날이 ${short}일 있어요`, "짧은 잠이 이어지면 근력 회복과 식욕 조절이 나빠져요. 다음 날 고강도 운동은 줄이는 게 좋아요"));
   out.push(sd > 60 ? verdict("warn", "잠드는 시간이 들쑥날쑥해요", `취침 시각이 평균 ±${Math.round(sd)}분 차이 나요. 매일 비슷한 시간(±30분)에 자면 잠의 질이 좋아져요`)
     : verdict("good", "잠드는 시간이 규칙적이에요", `평균 취침 ${hhmm(new Date(2000, 0, 1, 0, Math.round(bm < 0 ? bm + 1440 : bm)).getTime())} · 차이 ±${Math.round(sd)}분`));
@@ -2281,8 +2297,16 @@ function renderSleep() {
       ${s ? `<div class="sleeprow">${sleepDial(cur, 150)}<div class="sleepbig col"><div><span class="k">취침</span><b>${esc(s.bed)}</b></div><div><span class="k">기상</span><b>${esc(s.wake)}</b></div>
           ${s.wakes && s.wakes.length ? `<div><span class="k">자다 깸</span><b>${awakeMin(s)}<small>분</small></b><span class="hint">${s.wakes.map(x => `${esc(x.at)} ${n0(x.min)}분`).join(" · ")}</span></div>` : ""}</div></div>
         <button class="textbtn danger" data-del="${cur}:sleep">기록 삭제</button>` : `<p class="empty">취침과 기상 시각만 적으면 돼요. 일어난 날짜에 저장돼요.</p>`}</section>
+    <section class="panel rest"><div class="panel-h"><h2><i class="dot"></i>낮잠</h2><button class="add" data-act="nap">+ 낮잠</button></div>
+      ${day(cur).naps.length ? `<ul class="items">${[...day(cur).naps].sort((a, b) => a.start.localeCompare(b.start)).map(x => `<li><div class="it-main" data-editnap="${cur}:${esc(x.id)}" role="button" tabindex="0"><b>${esc(x.start)} → ${esc(x.end)} <span class="editmark">수정</span></b></div>
+        <span class="it-val">${fmtMin(spanMin(x.start, x.end))}</span><button class="del" data-del="${cur}:naps:${esc(x.id)}" aria-label="삭제">×</button></li>`).join("")}</ul>` : `<p class="empty">낮잠을 잤다면 시작과 끝 시각을 적어 두세요.</p>`}</section>
     <section class="panel rest"><div class="panel-h"><h2><i class="dot"></i>최근 7일 수면 분석</h2></div>${missingNote(["나이"])}${sleepAnalysis()}</section>
-    ${chart("rest", "수면 시간", "h", ts.map(x => x.sleep), sleepNeed(), v => v.toFixed(1))}`;
+    ${ts.some(x => x.nap) ? `<section class="panel rest"><div class="chart">
+      <div class="cap"><h2><i class="dot"></i>수면 시간</h2><span>최근 7일 · 밤잠 평균 <b class="num">${(() => { const v = ts.map(x => x.sleep).filter(Boolean); return v.length ? (v.reduce((a, b) => a + b) / v.length).toFixed(1) : "–"; })()}</b>h</span></div>
+      ${barChart({ labels: last7().map(k => WD[parseKey(k).getDay()]), tips: last7().map(mdw), vals: ts.map(x => x.sleep + x.nap), fmt: v => v.toFixed(1), unit: "h", goal: sleepNeed(), color: "var(--rest)",
+        stack: { vals: ts.map(x => x.nap), color: "var(--rec-fg)", tip: (i) => ts[i].nap ? ` (밤 ${ts[i].sleep.toFixed(1)} · 낮잠 ${ts[i].nap.toFixed(1)})` : "" } })}
+      <p class="legend"><span><i style="background:var(--rest)"></i>밤잠</span><span><i style="background:var(--rec-fg)"></i>낮잠</span><span>점선: 목표 ${sleepNeed()}시간</span></p></div></section>`
+      : chart("rest", "수면 시간", "h", ts.map(x => x.sleep), sleepNeed(), v => v.toFixed(1))}`;
 }
 function routinesHTML() {
   const byPart = PARTS.map(p => [p, lib.exercises.filter(e => e.part === p)]).filter(([, l]) => l.length);
@@ -2929,6 +2953,32 @@ function openDrinkTypes() {
   });
 }
 
+function openNap(k = cur, id = null) {
+  const ex = id ? day(k).naps.find(x => x.id === id) : null;
+  const h = new Date().getHours(), def = k === todayKey() && h >= 12 ? `${String(h - 1).padStart(2, "0")}:00` : "14:00";
+  sheetState = {};
+  showSheet(`<form id="f" class="form" novalidate><h3>${ex ? "낮잠 수정" : "낮잠 기록"} · ${md(k)}</h3>
+    <div class="row2"><div class="field"><label for="n-start">잠든 시각</label><input id="n-start" type="time" value="${esc(ex ? ex.start : def)}"></div>
+      <div class="field"><label for="n-end">깬 시각</label><input id="n-end" type="time" value="${esc(ex ? ex.end : def.slice(0, 3) + "30")}"></div></div>
+    <div class="seg" id="n-q">${[20, 30, 60, 90].map(v => `<button type="button" data-v="${v}">${v}분</button>`).join("")}</div>
+    <p class="hint" id="n-dur"></p>
+    ${ex ? `<button type="button" class="textbtn danger" id="n-del">이 기록 지우기</button>` : ""}
+    ${formTail(ex ? "수정" : "저장")}</form>`);
+  const upd = () => { const a = $("n-start").value, b = $("n-end").value; $("n-dur").textContent = a && b && a !== b ? `${fmtMin(spanMin(a, b))} · 20~30분이 개운하고 밤잠도 덜 방해해요` : ""; };
+  $("n-q").onclick = e => { const b = e.target.closest("[data-v]"); if (!b || !$("n-start").value) return; const [hh, mm] = $("n-start").value.split(":").map(Number), t = hh * 60 + mm + Number(b.dataset.v);
+    $("n-end").value = `${String(Math.floor(t / 60) % 24).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`; upd(); };
+  $("f").addEventListener("input", upd); upd();
+  if ($("n-del")) $("n-del").onclick = () => { const d = day(k); d.naps = d.naps.filter(x => x.id !== ex.id); days = { ...days, [k]: d }; closeSheet(true); render(); persist(k); toast("지웠어요"); };
+  bindForm(() => {
+    const start = $("n-start").value, end = $("n-end").value;
+    if (!start || !end) return failMsg("잠든 시각과 깬 시각을 입력하세요."); if (start === end) return failMsg("두 시각이 같아요.");
+    if (spanMin(start, end) > 360) return failMsg("낮잠이 6시간을 넘어요. 밤잠이면 수면 기록에 적어 주세요.");
+    const d = day(k), x = { id: ex ? ex.id : uid(), start, end };
+    d.naps = ex ? d.naps.map(y => y.id === ex.id ? x : y) : [...d.naps, x];
+    days = { ...days, [k]: d }; closeSheet(true); render(); persist(k); toast(ex ? "수정했어요" : "저장했어요");
+  });
+}
+
 function openSleep(k = cur) {
   const s = day(k).sleep || { bed: "23:30", wake: "07:00" };
   sheetState = {};
@@ -3051,10 +3101,11 @@ function openBackup() {
         body: v.body && n0(v.body.weight) ? { weight: n0(v.body.weight), muscle: n0(v.body.muscle), fat: n0(v.body.fat) } : null,
         supps: v.supps && typeof v.supps === "object" ? Object.fromEntries(Object.entries(v.supps).filter(([kk, vv]) => /^[A-Za-z0-9_-]{1,64}@[가-힣 ]{2,5}$/.test(kk) && n0(vv)).map(([kk, vv]) => [kk, n0(vv)])) : {},
         drinks: arr(v.drinks).filter(x => str(x.type) && x.type.length <= 20 && n0(x.ml) > 0 && n0(x.ml) <= 5000 && n0(x.abv) <= 70).map(x => ({ id: okId(x.id) ? x.id : uid(), t: n0(x.t), type: x.type, ml: n0(x.ml), abv: n0(x.abv) })),
-        water: arr(v.water).filter(x => n0(x.ml) > 0 && n0(x.ml) <= 5000).map(x => ({ t: n0(x.t), ml: n0(x.ml) })), sweat: ["적음","보통","많이"].includes(v.sweat) ? v.sweat : undefined };
+        water: arr(v.water).filter(x => n0(x.ml) > 0 && n0(x.ml) <= 5000).map(x => ({ t: n0(x.t), ml: n0(x.ml) })),
+        naps: arr(v.naps).filter(x => x && hm(x.start) && hm(x.end) && x.start !== x.end && spanMin(x.start, x.end) <= 360).slice(0, 10).map(x => ({ id: okId(x.id) ? x.id : uid(), start: x.start, end: x.end })), sweat: ["적음","보통","많이"].includes(v.sweat) ? v.sweat : undefined };
       const a = day(k);
       const union = (x, y) => [...x, ...y.filter(i => !x.some(j => j.id === i.id))];
-      days = { ...days, [k]: { workouts: union(a.workouts, b.workouts), meals: union(a.meals, b.meals), sleep: a.sleep || b.sleep, body: a.body || b.body, supps: { ...b.supps, ...a.supps }, water: a.water.length ? a.water : b.water, drinks: union(a.drinks, b.drinks), sweat: a.sweat || b.sweat } };
+      days = { ...days, [k]: { workouts: union(a.workouts, b.workouts), meals: union(a.meals, b.meals), sleep: a.sleep || b.sleep, body: a.body || b.body, supps: { ...b.supps, ...a.supps }, water: a.water.length ? a.water : b.water, drinks: union(a.drinks, b.drinks), naps: union(a.naps, b.naps), sweat: a.sweat || b.sweat } };
       changed.push(k);
     }
     if (inc.lib) {
@@ -3144,7 +3195,7 @@ document.addEventListener("click", e => {
 window.addEventListener("scroll", () => { const pop = $("pop"); if (Date.now() - (Number(pop.dataset.at) || 0) > 350) pop.hidden = true; }, true);
 document.addEventListener("click", e => {
   if (e.target.closest("#sheet, #work, #viewer")) return;
-  const t = e.target.closest("button, [data-photo], [data-part], [data-editmeal], [data-editdrink]"); if (!t) return;
+  const t = e.target.closest("button, [data-photo], [data-part], [data-editmeal], [data-editdrink], [data-editnap]"); if (!t) return;
   if (t.dataset.water) { const w = t.closest("[data-waterday]"); return addWater(Number(t.dataset.water), w ? w.dataset.waterday : cur); }
   const ds = t.dataset;
   if (ds.photo) { $("viewer-img").src = photoSrc(ds.photo); $("viewer").hidden = false; return; }
@@ -3162,6 +3213,7 @@ document.addEventListener("click", e => {
   if (ds.sweat) { const w = t.closest("[data-waterday]"), k = w ? w.dataset.waterday : cur, d = day(k);
     d.sweat = ds.sweat === "보통" ? undefined : ds.sweat; days = { ...days, [k]: d }; persist(k); render();
     return toast(`땀 ${ds.sweat} · 물 목표 ${(waterGoal(k) / 1000).toFixed(1)}L`); }
+  if (ds.editnap) { const [k, id] = ds.editnap.split(":"); return openNap(k, id); }
   if (ds.dgo) { const [v, k] = ds.dgo.split(":"); cur = k;
     if (v === "supp" || v === "drink") { fsub = v; return setView("food"); }
     if (v === "food") fsub = "meal"; if (v === "work") wsub = "log"; return setView(v); }
@@ -3178,7 +3230,7 @@ document.addEventListener("click", e => {
   if (ds.act) {
     const a = ds.act;
     if (a === "startw") openStartSheet(); else if (a === "resume") startSession();
-    else if (a === "cardio") openCardio(); else if (a === "meal") openMeal(); else if (a === "sleep") openSleep(t.closest(".glance") ? todayKey() : cur);
+    else if (a === "cardio") openCardio(); else if (a === "meal") openMeal(); else if (a === "nap") openNap(); else if (a === "sleep") openSleep(t.closest(".glance") ? todayKey() : cur);
     else if (a === "water") { const w = t.closest("[data-waterday]"); addWater(50, w ? w.dataset.waterday : cur); }
     else if (a === "drinktypes") openDrinkTypes();
     else if (a === "watercustom") { if (t.closest(".glance")) cur = todayKey(); openWaterCustom(); }
